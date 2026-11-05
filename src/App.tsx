@@ -13,6 +13,7 @@ import { Loader2 } from "lucide-react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { DocumentScaleSync } from "@/hooks/useDocumentScale";
 import { ZoomLock } from "@/hooks/useZoomLock";
+import { PrintTitleGuard } from "@/hooks/usePrintTitle";
 
 /**
  * React.lazy with one retry, then a single forced reload.
@@ -181,6 +182,8 @@ const App = () => (
           <DocumentScaleSync />
           {/* iOS ignores user-scalable=no, so pinch-zoom is blocked here too */}
           <ZoomLock />
+          {/* Keeps the site name out of the printed page header */}
+          <PrintTitleGuard />
           {/* Outer boundary also covers the public routes (/auth, /portal, /sign/*),
               which render lazy pages outside the in-layout Suspense below. */}
           <RouteErrorBoundary>
