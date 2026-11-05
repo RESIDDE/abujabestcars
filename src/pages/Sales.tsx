@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import logoAsset from "@/assets/logo.png";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useFormPersistence } from "@/hooks/useFormPersistence";
@@ -57,7 +56,7 @@ import { CurrencyInput } from "@/components/CurrencyInput";
 import { CustomerSelect } from "@/components/CustomerSelect";
 import { useCustomerDuplicates } from "@/hooks/useCustomerDuplicates";
 import { CustomerSuggestion } from "@/components/CustomerSuggestion";
-import { SalePrintPreview } from "@/components/sales/SalePrintPreview";
+import { SalePrintPreview, exportSaleReceipt } from "@/components/sales/SalePrintPreview";
 
 const COLORS = ["hsl(var(--primary))", "hsl(142 76% 36%)", "hsl(38 92% 50%)", "hsl(262 83% 58%)", "hsl(0 84% 60%)", "hsl(199 89% 48%)"];
 
@@ -764,98 +763,43 @@ export default function Sales() {
   };
 
   const downloadSaleReceipt = async (sale: any, type: 'pdf' | 'png' | 'jpeg') => {
-    const cust = customerObjMap[sale.customer_id];
     const filename = `receipt-${sale.id.slice(0, 8)}`;
 
     try {
-      console.log("Starting document generation for:", filename, "Format:", type);
       toast.loading(`Preparing ${type.toUpperCase()} download...`, { id: "sale-dl" });
 
-      console.log("Fetching logo asset...");
-      const logoBase64 = await fetch(logoAsset)
-        .then(r => r.blob())
-        .then(blob => new Promise<string>((res, rej) => {
-          const reader = new FileReader();
-          reader.onload = () => res(reader.result as string);
-          reader.onerror = rej;
-          reader.readAsDataURL(blob);
-        }));
+      // Render the real receipt component so the file matches the document
+      // on screen, and carries none of the browser's print furniture.
+      const payments = sale.sale_payments || [];
+      const blob = await exportSaleReceipt(
+        {
+          sale,
+          customer: customerObjMap[sale.customer_id],
+          vehicles,
+          allPayments: payments,
+          customerSignature: sale.buyer_signature || null,
+          customerSignatureDate: sale.buyer_signature_date || null,
+          repSignature: sale.rep_signature || null,
+          repSignatureDate: sale.rep_signature_date || null,
+        },
+        type,
+        filename
+      );
 
-      const html = `<!DOCTYPE html><html><head><title>Receipt - ${sale.id}</title>
-        <style>
-          @page { margin: 0; size: A4; }
-          @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap');
-          body { font-family: 'Roboto', 'Arial', sans-serif; padding: 76px; width: 794px; margin: 0; box-sizing: border-box; background: #fff; color: #1a1a1a; line-height: 1.4; }
-          .date-section { text-align: right; font-weight: 800; font-size: 14px; margin-bottom: 20px; text-transform: uppercase; padding: 0; }
-          .bill-to { margin-bottom: 30px; padding: 0; }
-          .bill-to p { margin: 2px 0; font-size: 14px; }
-          .main-container { border-radius: 40px; padding: 40px; min-height: 600px; position: relative; border: 1px solid #94a3b8; }
-          .content-wrapper { position: relative; z-index: 1; }
-          .bill-title { text-align: center; text-decoration: underline; font-weight: 900; font-size: 22px; margin-bottom: 30px; color: #1e293b; text-transform: uppercase; }
-          .refund-note { text-align: center; font-weight: 900; font-size: 14px; color: #dc2626; border: 2px solid #dc2626; padding: 10px; margin: 20px 0; border-radius: 12px; }
-          .signature-area { display: flex; justify-content: space-between; margin-top: 40px; }
-          .sig-box { text-align: center; width: 250px; }
-          .signature-img { max-height: 60px; margin-bottom: 5px; }
-        </style></head><body>
-        ${getPrintHeaderHTML(logoBase64)}
-        ${printReceipt(sale, false, logoBase64)}
-        ${getPrintFooterHTML(sale.buyer_signature, sale.rep_signature)}
-        </body></html>`;
-
-      const iframe = document.createElement("iframe");
-      iframe.style.cssText = "position:fixed;left:-9999px;top:-9999px;width:750px;height:2000px;border:none;visibility:hidden;";
-      document.body.appendChild(iframe);
-      const iDoc = iframe.contentDocument!;
-      iDoc.open(); iDoc.write(html); iDoc.close();
-
-      await new Promise<void>(res => {
-        const imgs = Array.from(iDoc.images);
-        if (imgs.length === 0) { setTimeout(res, 400); return; }
-        let loaded = 0;
-        const done = () => { if (++loaded >= imgs.length) setTimeout(res, 200); };
-        imgs.forEach(img => {
-          if (img.complete) done();
-          else { img.onload = done; img.onerror = done; }
-        });
-        setTimeout(res, 1200);
-      });
-
-      const contentEl = iDoc.documentElement;
-      const fullHeight = contentEl.scrollHeight;
-      iframe.style.height = `${fullHeight}px`;
-      await new Promise<void>(res => setTimeout(res, 100));
-
-      const { toPng, toJpeg } = await import("html-to-image");
-      let fileBlob: Blob;
-      let fileExt = type;
-
-      if (type === 'png') {
-        const dataUrl = await toPng(contentEl, { pixelRatio: 2, backgroundColor: "#ffffff" });
-        fileBlob = await fetch(dataUrl).then(r => r.blob());
-      } else if (type === 'jpeg') {
-        const dataUrl = await toJpeg(contentEl, { pixelRatio: 2, backgroundColor: "#ffffff", quality: 0.95 });
-        fileBlob = await fetch(dataUrl).then(r => r.blob());
-      } else {
-        const dataUrl = await toPng(contentEl, { pixelRatio: 2, backgroundColor: "#ffffff" });
-        const { default: jsPDF } = await import("jspdf");
-        const a4Width = 595;
-        const scale = a4Width / 794;
-        const pdfPageH = fullHeight * scale;
-        const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: [a4Width, pdfPageH] });
-        pdf.addImage(dataUrl, "PNG", 0, 0, a4Width, pdfPageH);
-        fileBlob = pdf.output('blob');
-        fileExt = 'pdf';
-      }
-
-      console.log("Triggering browser download...");
-      const url = URL.createObjectURL(fileBlob);
+      const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${filename}.${fileExt}`;
+      a.download = `${filename}.${type}`;
       a.click();
       URL.revokeObjectURL(url);
-      logAction("EXPORT", "Sales", sale.id, { vehicle: sale.sale_vehicles?.[0]?.vehicle ? `${sale.sale_vehicles[0].vehicle.year} ${sale.sale_vehicles[0].vehicle.make} ${sale.sale_vehicles[0].vehicle.model}` : "Vehicle", format: fileExt.toUpperCase(), method: "Download" });
-      document.body.removeChild(iframe);
+
+      logAction("EXPORT", "Sales", sale.id, {
+        vehicle: sale.sale_vehicles?.[0]?.vehicle
+          ? `${sale.sale_vehicles[0].vehicle.year} ${sale.sale_vehicles[0].vehicle.make} ${sale.sale_vehicles[0].vehicle.model}`
+          : "Vehicle",
+        format: type.toUpperCase(),
+        method: "Download",
+      });
       toast.success("Download complete", { id: "sale-dl" });
     } catch (err) {
       console.error("Download error:", err);

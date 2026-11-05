@@ -313,9 +313,11 @@ QuoteDocument.displayName = "QuoteDocument";
 /* ---------------------------------------------------------------- */
 
 async function captureToPdf(el: HTMLElement, filename: string) {
-  const { toPng } = await import("html-to-image");
+  const { toJpeg } = await import("html-to-image");
   const { jsPDF } = await import("jspdf");
-  const imgData = await toPng(el, { pixelRatio: 2, backgroundColor: "#ffffff", cacheBust: true });
+  // JPEG, not PNG: a full-page PNG of an A4 sheet runs to ~10MB, which is
+  // unusable for emailing or WhatsApp. At this quality the text stays crisp.
+  const imgData = await toJpeg(el, { pixelRatio: 2, backgroundColor: "#ffffff", cacheBust: true, quality: 0.92 });
 
   const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
   const pageW = pdf.internal.pageSize.getWidth();
@@ -324,12 +326,12 @@ async function captureToPdf(el: HTMLElement, filename: string) {
   const imgH = (props.height * pageW) / props.width;
 
   let y = 0;
-  pdf.addImage(imgData, "PNG", 0, y, pageW, imgH);
+  pdf.addImage(imgData, "JPEG", 0, y, pageW, imgH);
   let remaining = imgH - pageH;
   while (remaining > 1) {
     y -= pageH;
     pdf.addPage();
-    pdf.addImage(imgData, "PNG", 0, y, pageW, imgH);
+    pdf.addImage(imgData, "JPEG", 0, y, pageW, imgH);
     remaining -= pageH;
   }
   pdf.save(`${filename}.pdf`);

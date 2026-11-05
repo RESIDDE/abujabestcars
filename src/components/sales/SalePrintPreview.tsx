@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect, forwardRef } from "react";
+import { createRoot } from "react-dom/client";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Printer, Download, QrCode, CheckCircle2 } from "lucide-react";
 import {
@@ -425,6 +426,86 @@ export const SaleReceiptSheet = forwardRef<HTMLDivElement, SaleReceiptSheetProps
   }
 );
 SaleReceiptSheet.displayName = "SaleReceiptSheet";
+
+/* ---------------------------------------------------------------- */
+/*  File export — renders the real sheet off-screen and captures it  */
+/* ---------------------------------------------------------------- */
+
+/**
+ * Exports the receipt as a file.
+ *
+ * This renders the same <SaleReceiptSheet /> the user sees, so the file
+ * always matches the on-screen document. A generated file also has none of
+ * the URL, date and "Page 1 of 2" furniture the browser stamps onto anything
+ * printed through the print dialog — that is browser chrome, drawn outside
+ * the page, and no stylesheet can remove it.
+ */
+export async function exportSaleReceipt(
+  props: Omit<SaleReceiptSheetProps, "onSignClick" | "isSigningMode">,
+  format: "pdf" | "png" | "jpeg",
+  filename: string
+): Promise<Blob> {
+  const host = document.createElement("div");
+  host.style.cssText = "position:fixed;left:-10000px;top:0;z-index:-1;background:#fff;";
+  document.body.appendChild(host);
+  const root = createRoot(host);
+
+  try {
+    await new Promise<void>((resolve) => {
+      root.render(<SaleReceiptSheet {...props} />);
+      // Give React a frame to commit and the logo a moment to decode.
+      setTimeout(resolve, 900);
+    });
+
+    const el = host.firstElementChild as HTMLElement;
+    el.style.boxShadow = "none";
+    el.style.border = "none";
+    el.style.width = "210mm";
+    el.style.minHeight = "297mm";
+    // Neutralise the small-screen fit rule, otherwise exporting from a phone
+    // would capture a shrunken sheet.
+    el.style.zoom = "1";
+
+    // Wait for every image (logo, watermark, signatures) to finish decoding.
+    await Promise.all(
+      Array.from(el.querySelectorAll("img")).map((img) =>
+        img.complete ? Promise.resolve() : new Promise((r) => { img.onload = r; img.onerror = r; })
+      )
+    );
+
+    const { toPng, toJpeg } = await import("html-to-image");
+    const opts = { pixelRatio: 2, backgroundColor: "#ffffff", cacheBust: true };
+
+    if (format === "png" || format === "jpeg") {
+      const dataUrl = format === "png" ? await toPng(el, opts) : await toJpeg(el, { ...opts, quality: 0.95 });
+      return await fetch(dataUrl).then((r) => r.blob());
+    }
+
+    // JPEG, not PNG: a full-page PNG of an A4 sheet runs to ~10MB, which is
+    // unusable for emailing or WhatsApp. At this quality the text stays crisp.
+    const dataUrl = await toJpeg(el, { ...opts, quality: 0.92 });
+    const { jsPDF } = await import("jspdf");
+    const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const imgProps = pdf.getImageProperties(dataUrl);
+    const imgH = (imgProps.height * pageW) / imgProps.width;
+
+    let y = 0;
+    pdf.addImage(dataUrl, "JPEG", 0, y, pageW, imgH);
+    let remaining = imgH - pageH;
+    while (remaining > 1) {
+      y -= pageH;
+      pdf.addPage();
+      pdf.addImage(dataUrl, "JPEG", 0, y, pageW, imgH);
+      remaining -= pageH;
+    }
+    return pdf.output("blob");
+  } finally {
+    root.unmount();
+    document.body.removeChild(host);
+  }
+}
 
 /* ---------------------------------------------------------------- */
 /*  Main Preview Component (Desk / Management View)                 */
