@@ -12,6 +12,7 @@ import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { DocumentScaleSync } from "@/hooks/useDocumentScale";
+import { ZoomLock } from "@/hooks/useZoomLock";
 
 /**
  * React.lazy with one retry, then a single forced reload.
@@ -178,6 +179,8 @@ const App = () => (
           <PermissionsRealtimeSync />
           {/* Keeps A4 document sheets scaled to the screen on phones */}
           <DocumentScaleSync />
+          {/* iOS ignores user-scalable=no, so pinch-zoom is blocked here too */}
+          <ZoomLock />
           {/* Outer boundary also covers the public routes (/auth, /portal, /sign/*),
               which render lazy pages outside the in-layout Suspense below. */}
           <RouteErrorBoundary>
