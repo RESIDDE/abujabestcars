@@ -412,7 +412,25 @@ export default function SalesAgreement() {
               border: none !important; box-shadow: none !important; background: white !important;
               page-break-inside: avoid !important; break-inside: avoid !important;
             }
-          }
+
+            /* The blanket reset above also matches the watermark, whose classes
+               include "overflow-hidden" and the h-[460px] size. Stripping its
+               positioning dropped the logo into the flow at the top of the sheet
+               and pushed the document onto a second page, so restore it here —
+               this rule comes later, so it wins on equal specificity. */
+            .print-watermark {
+              position: absolute !important;
+              inset: 0 !important;
+              height: 100% !important;
+              min-height: 0 !important;
+              overflow: hidden !important;
+            }
+            .print-watermark img {
+              width: 460px !important;
+              height: 460px !important;
+              max-height: 460px !important;
+            }
+        }
         `}} />
         {/* Toolbar */}
         <div className="flex items-center justify-between mb-6 print:hidden">

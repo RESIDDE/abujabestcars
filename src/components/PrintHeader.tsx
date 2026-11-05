@@ -70,7 +70,7 @@ export function getPrintHeaderHTML(base64Logo?: string) {
 // React component for watermark
 export function PrintWatermark({ opacity }: { opacity?: number } = {}) {
   return (
-    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 select-none overflow-hidden">
+    <div className="print-watermark absolute inset-0 flex items-center justify-center pointer-events-none z-0 select-none overflow-hidden">
       <img
         src={logo}
         alt="Watermark"
@@ -89,7 +89,7 @@ export function PrintWatermark({ opacity }: { opacity?: number } = {}) {
 export function getPrintWatermarkHTML(base64Logo?: string) {
   const logoUrl = base64Logo || `${window.location.origin}${logo}`;
   return `
-    <div style="
+    <div class="print-watermark" style="
       position: absolute;
       top: 0;
       left: 0;
