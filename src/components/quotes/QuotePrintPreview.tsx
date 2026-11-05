@@ -2,8 +2,19 @@ import React, { forwardRef, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Printer, Download, Loader2 } from "lucide-react";
-import { PrintHeader, PrintWatermark, BRAND_BADGE, BRAND_DARK, BRAND_PINK, BRAND_RED } from "@/components/PrintHeader";
-import { PrintFooter } from "@/components/PrintFooter";
+import {
+  PrintWatermark,
+  ModernLetterhead,
+  PaymentDetailsPanel,
+  MetaLabel,
+  titleCase,
+  COMPANY,
+  BRAND_RED,
+  INK,
+  RULE,
+  ROW_RULE,
+  MODERN_FONT,
+} from "@/components/PrintHeader";
 import { numberToWords } from "@/lib/numberToWords";
 import { parseVehicleSpec } from "@/lib/vehicleSpec";
 import { toast } from "sonner";
@@ -14,33 +25,19 @@ interface QuotePrintPreviewProps {
   onDownloadPdf?: () => void;
 }
 
-const exact = { WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" } as React.CSSProperties;
+const exactPrint = { WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" } as React.CSSProperties;
 
-function Line({ label, value }: { label: string; value?: React.ReactNode }) {
-  return (
-    <div style={{ display: "flex", alignItems: "flex-end", gap: 6, fontSize: 13, fontFamily: "Georgia, serif" }}>
-      <span style={{ whiteSpace: "nowrap" }}>{label}</span>
-      <span style={{ flex: 1, borderBottom: "1px solid #333", minHeight: 18, paddingLeft: 4, fontFamily: "Arial, sans-serif", fontWeight: 600, fontSize: 12.5 }}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
-const splitNaira = (n: number) => {
-  const naira = Math.floor(n);
-  const kobo = String(Math.round((n - naira) * 100)).padStart(2, "0");
-  return { naira: naira.toLocaleString(), kobo };
-};
+const money = (n: number) => `₦${Math.round(Number(n) || 0).toLocaleString()}`;
 
 /* ---------------------------------------------------------------- */
-/*  The A4 Proforma Invoice sheet (Cash/Credit Invoice design)       */
+/*  The A4 Proforma Invoice sheet (matches the sales receipt)        */
 /* ---------------------------------------------------------------- */
 
 export const QuoteDocument = forwardRef<HTMLDivElement, { quote: any }>(({ quote }, ref) => {
   const items: any[] = quote.performance_quote_items || [];
   const d = new Date(quote.quote_date || quote.created_at || Date.now());
-  const invoiceNo = `PI-${(quote.id || "").slice(0, 8).toUpperCase()}`;
+  const docNumber = `PI-${(quote.id || "").slice(0, 8).toUpperCase()}`;
+  const issued = d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
   const totalAmount = Number(quote.total_amount) || 0;
   const vatPercentage = Number(quote.vat_percentage) || 0;
@@ -48,238 +45,263 @@ export const QuoteDocument = forwardRef<HTMLDivElement, { quote: any }>(({ quote
   const subtotal = totalAmount - vatAmount;
 
   type Row = {
-    description: React.ReactNode;
-    condition?: string;
-    year?: string;
-    transmission?: string;
-    engine?: string;
-    vin?: string;
+    title: string;
+    tag?: string;
+    sub?: string;
     qty: number;
     rate: number;
     amount: number;
   };
 
   const rows: Row[] = [];
+  const specs: { spec: ReturnType<typeof parseVehicleSpec> }[] = [];
+
   items.forEach((item) => {
     const spec = parseVehicleSpec(item);
+    specs.push({ spec });
     const qty = Number(item.quantity) || 1;
     const rate = Number(item.base_price) || 0;
     rows.push({
-      description: (
-        <>
-          <div style={{ fontWeight: 800, textTransform: "uppercase" }}>{spec.title}</div>
-          {(spec.color || spec.extras.length > 0) && (
-            <div style={{ fontSize: 10, color: "#444", marginTop: 1 }}>
-              {[spec.color && `Colour: ${spec.color}`, ...spec.extras].filter(Boolean).join(" • ")}
-            </div>
-          )}
-        </>
-      ),
-      condition: spec.condition,
-      year: spec.year,
-      transmission: spec.transmission,
-      engine: spec.engine,
-      vin: spec.vin,
-      qty,
-      rate,
-      amount: rate * qty,
-    });
-  });
-  items.filter((i) => i.has_duty).forEach((item) => {
-    const spec = parseVehicleSpec(item);
-    const qty = Number(item.quantity) || 1;
-    const rate = Number(item.duty_price) || 0;
-    rows.push({
-      description: <div style={{ fontWeight: 800, textTransform: "uppercase" }}>Custom Duty — {spec.title}</div>,
-      vin: spec.vin,
+      title: spec.title,
+      tag: spec.condition || "",
+      sub: [
+        spec.year && `Year: ${spec.year}`,
+        spec.transmission,
+        spec.engine,
+        spec.color && `Colour: ${spec.color}`,
+        ...spec.extras,
+      ]
+        .filter(Boolean)
+        .join("  ·  "),
       qty,
       rate,
       amount: rate * qty,
     });
   });
 
-  const emptyRows = Math.max(0, 6 - rows.length);
-  const total = splitNaira(totalAmount);
+  items
+    .filter((i) => i.has_duty)
+    .forEach((item) => {
+      const spec = parseVehicleSpec(item);
+      const qty = Number(item.quantity) || 1;
+      const rate = Number(item.duty_price) || 0;
+      rows.push({
+        title: "Custom duty",
+        tag: spec.title,
+        sub: spec.vin ? `VIN: ${spec.vin}` : "",
+        qty,
+        rate,
+        amount: rate * qty,
+      });
+    });
 
-  const cell: React.CSSProperties = { border: "1px solid #222", padding: "5px 5px", fontSize: 10.5, verticalAlign: "top", fontFamily: "Arial, sans-serif" };
-  const center: React.CSSProperties = { ...cell, textAlign: "center" };
-  const pink: React.CSSProperties = { ...cell, background: BRAND_PINK, textAlign: "right", fontWeight: 700, ...exact };
-  const th: React.CSSProperties = { background: BRAND_DARK, color: "#fff", fontFamily: "Arial, sans-serif", fontWeight: 600, fontSize: 9.5, padding: "6px 4px", letterSpacing: 0.4, textAlign: "center", ...exact };
+  const colQty: React.CSSProperties = { width: 54, textAlign: "center" };
+  const colUnit: React.CSSProperties = { width: 118, textAlign: "right" };
+  const colAmt: React.CSSProperties = { width: 118, textAlign: "right" };
+  const headCell: React.CSSProperties = {
+    fontSize: 9.5,
+    color: "#777",
+    fontWeight: 500,
+    paddingBottom: 9,
+    borderBottom: `1px solid ${RULE}`,
+  };
+  const bodyCell: React.CSSProperties = {
+    padding: "11px 0",
+    borderBottom: `1px solid ${ROW_RULE}`,
+    fontSize: 11,
+    verticalAlign: "middle",
+  };
+  const sumRow: React.CSSProperties = {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 16,
+    padding: "3px 0",
+    fontSize: 11,
+  };
 
   return (
     <div
       ref={ref}
       className="print-document-page bg-white text-black shadow-2xl border border-gray-200 shrink-0 relative"
-      style={{ width: "210mm", minHeight: "297mm", padding: "12mm 14mm", boxSizing: "border-box", color: "#111" }}
+      style={{ width: "210mm", minHeight: "297mm", padding: "12mm 14mm", boxSizing: "border-box", color: INK }}
     >
-      <PrintWatermark />
-      <div style={{ position: "relative", zIndex: 1 }}>
-        <PrintHeader />
+      <PrintWatermark opacity={0.05} />
+      <div style={{ position: "relative", zIndex: 1, fontFamily: MODERN_FONT }}>
+        <ModernLetterhead docTitle="Proforma" docNumber={docNumber} />
 
-        {/* Badge + number */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 18 }}>
-          <div style={{ background: BRAND_BADGE, color: "#fff", fontWeight: 700, fontSize: 14, padding: "5px 14px", letterSpacing: 0.5, ...exact }}>
-            PROFORMA INVOICE
-          </div>
-          <div style={{ fontFamily: "Georgia, serif", fontStyle: "italic", fontWeight: 700, fontSize: 16 }}>
-            No.: <span style={{ fontFamily: "monospace", fontStyle: "normal", letterSpacing: 1.5 }}>{invoiceNo}</span>
-          </div>
-        </div>
+        <div style={{ height: 1, background: RULE, margin: "15px 0 17px", ...exactPrint }} />
 
-        {/* Customer block + date box */}
-        <div style={{ display: "flex", gap: 16, marginTop: 14, alignItems: "flex-start" }}>
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid #444", borderBottom: "1px solid #444", padding: "6px 0" }}>
-            <Line label="Name:" value={quote.customers?.name} />
-            <Line label="Address:" value={(quote.customers?.address || "").replace(/\r?\n/g, ", ")} />
-            <div style={{ display: "flex", gap: 14 }}>
-              <div style={{ flex: 1 }}><Line label="Tel:" value={quote.customers?.phone} /></div>
-              <div style={{ flex: 1.3 }}><Line label="Email:" value={quote.customers?.email} /></div>
+        {/* Billed to · date · validity · vehicles */}
+        <div style={{ display: "flex", gap: 22, alignItems: "flex-start" }}>
+          <div style={{ width: "40%" }}>
+            <MetaLabel>Billed to</MetaLabel>
+            <div style={{ fontSize: 14.5, fontWeight: 800, textTransform: "uppercase", marginTop: 5, lineHeight: 1.2 }}>
+              {quote.customers?.name || "—"}
+            </div>
+            {quote.customers?.phone && <div style={{ fontSize: 10, color: "#666", marginTop: 4 }}>{quote.customers.phone}</div>}
+            {quote.customers?.address && (
+              <div style={{ fontSize: 10, color: "#666", marginTop: 1 }}>
+                {String(quote.customers.address).replace(/\r?\n/g, ", ")}
+              </div>
+            )}
+            {quote.customers?.email && <div style={{ fontSize: 10, color: "#666", marginTop: 1 }}>{quote.customers.email}</div>}
+          </div>
+
+          <div style={{ flex: 1 }}>
+            <MetaLabel>Date issued</MetaLabel>
+            <div style={{ fontSize: 12, fontWeight: 700, marginTop: 5 }}>{issued}</div>
+
+            {specs.length > 0 && (
+              <div style={{ marginTop: 15 }}>
+                <MetaLabel>{specs.length > 1 ? "Vehicles" : "Vehicle"}</MetaLabel>
+                {specs.map(({ spec }, i) => (
+                  <div key={i} style={{ marginTop: 7 }}>
+                    <div style={{ fontSize: 11.5, fontWeight: 700 }}>
+                      {spec.title}
+                      {spec.year ? ` (${spec.year})` : ""}
+                    </div>
+                    <div style={{ fontSize: 8.5, color: "#777", lineHeight: 1.65, marginTop: 1 }}>
+                      {spec.vin && (
+                        <>
+                          VIN: <b style={{ color: "#333" }}>{spec.vin}</b>
+                          <br />
+                        </>
+                      )}
+                      {spec.color && (
+                        <>
+                          Color: <b style={{ color: "#333" }}>{spec.color}</b>
+                          <br />
+                        </>
+                      )}
+                      {spec.condition && (
+                        <>
+                          Condition: <b style={{ color: "#333" }}>{spec.condition}</b>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div style={{ width: 118, textAlign: "right" }}>
+            <MetaLabel>Status</MetaLabel>
+            <div style={{ fontSize: 11, fontWeight: 800, marginTop: 5, color: BRAND_RED, textTransform: "uppercase", letterSpacing: 0.3, ...exactPrint }}>
+              Awaiting payment
             </div>
           </div>
-          <table style={{ borderCollapse: "collapse", fontSize: 10, width: 190 }}>
-            <thead>
-              <tr>
-                {["DATE", "MONTH", "YEAR"].map((h) => (
-                  <th key={h} style={{ border: "1px solid #333", padding: "2px 4px", fontWeight: 500 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td style={{ border: "1px solid #333", textAlign: "center", height: 24, fontWeight: 700 }}>{d.getDate()}</td>
-                <td style={{ border: "1px solid #333", textAlign: "center", fontWeight: 700 }}>{d.toLocaleString("en-GB", { month: "short" })}</td>
-                <td style={{ border: "1px solid #333", textAlign: "center", fontWeight: 700 }}>{d.getFullYear()}</td>
-              </tr>
-            </tbody>
-          </table>
         </div>
 
-        {/* Items table */}
-        <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 14, tableLayout: "fixed" }}>
-          <colgroup>
-            <col style={{ width: 26 }} />
-            <col />
-            <col style={{ width: 62 }} />
-            <col style={{ width: 40 }} />
-            <col style={{ width: 58 }} />
-            <col style={{ width: 50 }} />
-            <col style={{ width: 92 }} />
-            <col style={{ width: 30 }} />
-            <col style={{ width: 78 }} />
-            <col style={{ width: 84 }} />
-            <col style={{ width: 24 }} />
-          </colgroup>
+        {/* Line items */}
+        <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 24 }}>
           <thead>
             <tr>
-              <th style={th} rowSpan={2}>S/N</th>
-              <th style={th} rowSpan={2}>DESCRIPTION OF GOOD</th>
-              <th style={th} rowSpan={2}>CONDITION</th>
-              <th style={th} rowSpan={2}>YEAR</th>
-              <th style={th} rowSpan={2}>TRANS.</th>
-              <th style={th} rowSpan={2}>ENGINE</th>
-              <th style={th} rowSpan={2}>VIN / CHASSIS</th>
-              <th style={th} rowSpan={2}>QTY</th>
-              <th style={th} rowSpan={2}>RATE (₦)</th>
-              <th style={th} colSpan={2}>AMOUNT</th>
-            </tr>
-            <tr>
-              <th style={{ ...th, padding: 2 }}>₦</th>
-              <th style={{ ...th, padding: 2 }}>K</th>
+              <th style={{ ...headCell, textAlign: "left" }}>Description</th>
+              <th style={{ ...headCell, ...colQty }}>Qty</th>
+              <th style={{ ...headCell, ...colUnit }}>Unit Price</th>
+              <th style={{ ...headCell, ...colAmt }}>Amount</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r, i) => (
               <tr key={i}>
-                <td style={center}>{i + 1}</td>
-                <td style={cell}>{r.description}</td>
-                <td style={center}>{r.condition || ""}</td>
-                <td style={center}>{r.year || ""}</td>
-                <td style={center}>{r.transmission || ""}</td>
-                <td style={center}>{r.engine || ""}</td>
-                <td style={{ ...cell, fontFamily: "monospace", fontSize: 9.5, wordBreak: "break-all" }}>{r.vin || ""}</td>
-                <td style={center}>{r.qty}</td>
-                <td style={{ ...cell, textAlign: "right" }}>{Math.floor(r.rate).toLocaleString()}</td>
-                <td style={pink}>{splitNaira(r.amount).naira}</td>
-                <td style={center}>{splitNaira(r.amount).kobo}</td>
-              </tr>
-            ))}
-            {Array.from({ length: emptyRows }).map((_, i) => (
-              <tr key={`e${i}`}>
-                {Array.from({ length: 11 }).map((__, c) => (
-                  <td key={c} style={c === 9 ? { ...pink, height: 26 } : { ...cell, height: 26 }} />
-                ))}
+                <td style={{ ...bodyCell, paddingRight: 14 }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontWeight: 700, fontSize: 11.5 }}>{r.title}</span>
+                    {r.tag && <span style={{ fontSize: 9.5, color: "#9a9a9a" }}>{r.tag}</span>}
+                  </div>
+                  {r.sub && <div style={{ fontSize: 9, color: "#777", marginTop: 2, lineHeight: 1.45 }}>{r.sub}</div>}
+                </td>
+                <td style={{ ...bodyCell, ...colQty }}>{r.qty}</td>
+                <td style={{ ...bodyCell, ...colUnit }}>{money(r.rate)}</td>
+                <td style={{ ...bodyCell, ...colAmt, fontWeight: 700 }}>{money(r.amount)}</td>
               </tr>
             ))}
           </tbody>
         </table>
 
-        {/* Totals */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginTop: 6 }}>
-          <div style={{ color: BRAND_RED, fontFamily: "Georgia, serif", fontStyle: "italic", fontSize: 12, lineHeight: 1.4, paddingTop: 4, maxWidth: 300 }}>
-            This is a Proforma Invoice and not a receipt of payment.<br />
-            No refund of money after payment.
+        {/* Amount in words + summary */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 26, marginTop: 20 }}>
+          <div style={{ flex: 1, paddingBottom: 2 }}>
+            <MetaLabel>Amount in words</MetaLabel>
+            <div style={{ fontSize: 11.5, fontStyle: "italic", marginTop: 5, lineHeight: 1.45 }}>
+              {titleCase(numberToWords(totalAmount))}
+            </div>
           </div>
-          <table style={{ borderCollapse: "collapse" }}>
-            <tbody>
-              {vatPercentage > 0 && (
-                <>
-                  <tr>
-                    <td style={{ fontWeight: 700, fontSize: 12, paddingRight: 10, fontFamily: "Georgia, serif", textAlign: "right" }}>SUBTOTAL ₦</td>
-                    <td style={{ border: "1px solid #222", width: 105, height: 26, textAlign: "right", fontWeight: 700, padding: "0 6px", fontSize: 12 }}>{splitNaira(subtotal).naira}</td>
-                    <td style={{ border: "1px solid #222", width: 30, textAlign: "center", fontSize: 12 }}>{splitNaira(subtotal).kobo}</td>
-                  </tr>
-                  <tr>
-                    <td style={{ fontWeight: 700, fontSize: 12, paddingRight: 10, fontFamily: "Georgia, serif", textAlign: "right" }}>VAT ({vatPercentage}%) ₦</td>
-                    <td style={{ border: "1px solid #222", height: 26, textAlign: "right", fontWeight: 700, padding: "0 6px", fontSize: 12 }}>{splitNaira(vatAmount).naira}</td>
-                    <td style={{ border: "1px solid #222", textAlign: "center", fontSize: 12 }}>{splitNaira(vatAmount).kobo}</td>
-                  </tr>
-                </>
-              )}
-              <tr>
-                <td style={{ fontWeight: 800, fontSize: 14, paddingRight: 10, fontFamily: "Georgia, serif", textAlign: "right" }}>TOTAL ₦</td>
-                <td style={{ border: "1px solid #222", background: BRAND_PINK, width: 105, height: 30, textAlign: "right", fontWeight: 800, padding: "0 6px", ...exact }}>{total.naira}</td>
-                <td style={{ border: "1px solid #222", width: 30, textAlign: "center", fontWeight: 700 }}>{total.kobo}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
 
-        {/* Amount in words */}
-        <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 10 }}>
-          <Line label="Amount in words:" value={numberToWords(totalAmount).toUpperCase()} />
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 8, fontFamily: "Georgia, serif", fontSize: 13 }}>
-            <span style={{ flex: 1, borderBottom: "1px solid #333", minHeight: 18 }} />
-            <span>Naira</span>
-            <span style={{ width: 110, borderBottom: "1px solid #333", minHeight: 18, textAlign: "center", fontFamily: "Arial", fontWeight: 600 }}>
-              {total.kobo !== "00" ? total.kobo : ""}
-            </span>
-            <span>Kobo</span>
+          <div style={{ width: 300 }}>
+            {vatPercentage > 0 && (
+              <>
+                <div style={sumRow}>
+                  <span style={{ color: "#555" }}>Subtotal</span>
+                  <span style={{ fontWeight: 700 }}>{money(subtotal)}</span>
+                </div>
+                <div style={sumRow}>
+                  <span style={{ color: "#555" }}>VAT ({vatPercentage}%)</span>
+                  <span style={{ fontWeight: 700 }}>{money(vatAmount)}</span>
+                </div>
+              </>
+            )}
+            <div style={{ ...sumRow, fontSize: 13.5, fontWeight: 800, paddingTop: 4 }}>
+              <span>Total</span>
+              <span>{money(totalAmount)}</span>
+            </div>
+            <div style={{ height: 1, background: RULE, margin: "8px 0", ...exactPrint }} />
+            <div style={{ ...sumRow, alignItems: "baseline" }}>
+              <span style={{ color: BRAND_RED, fontWeight: 800, fontSize: 13, ...exactPrint }}>Amount Due</span>
+              <span style={{ color: BRAND_RED, fontWeight: 800, fontSize: 16.5, ...exactPrint }}>{money(totalAmount)}</span>
+            </div>
           </div>
         </div>
 
-        {/* Bank details + notes */}
-        {(quote.bank_name || quote.account_number || quote.account_name) && (
-          <div style={{ marginTop: 16, border: "1px solid #222", display: "flex", fontFamily: "Arial, sans-serif", fontSize: 11.5 }}>
-            <div style={{ background: BRAND_DARK, color: "#fff", fontWeight: 700, padding: "8px 10px", display: "flex", alignItems: "center", letterSpacing: 0.5, ...exact }}>
-              BANK DETAILS
-            </div>
-            <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr 1.3fr", gap: 10, padding: "6px 10px" }}>
-              <div><div style={{ fontSize: 9, color: "#666", fontWeight: 700 }}>BANK</div><b>{quote.bank_name || "—"}</b></div>
-              <div><div style={{ fontSize: 9, color: "#666", fontWeight: 700 }}>ACCOUNT NO.</div><b style={{ fontFamily: "monospace", fontSize: 12.5 }}>{quote.account_number || "—"}</b></div>
-              <div><div style={{ fontSize: 9, color: "#666", fontWeight: 700 }}>ACCOUNT NAME</div><b>{quote.account_name || "—"}</b></div>
-            </div>
-          </div>
-        )}
+        {/* Payment details */}
+        <div style={{ marginTop: 20 }}>
+          <PaymentDetailsPanel
+            note="Kindly make payment to the account details below:"
+            bank={quote.bank_name}
+            account={quote.account_number}
+            accountName={quote.account_name}
+          />
+        </div>
 
         {quote.notes && (
-          <div style={{ marginTop: 12, fontFamily: "Arial, sans-serif", fontSize: 11, lineHeight: 1.45, borderLeft: `3px solid ${BRAND_BADGE}`, paddingLeft: 8 }}>
-            <b style={{ fontSize: 10.5 }}>NOTES / TERMS:</b>
-            <div style={{ whiteSpace: "pre-line", color: "#333" }}>{quote.notes}</div>
+          <div
+            className="break-inside-avoid print:break-inside-avoid"
+            style={{ marginTop: 16, borderLeft: `3px solid ${BRAND_RED}`, paddingLeft: 10, ...exactPrint }}
+          >
+            <MetaLabel>Notes / Terms</MetaLabel>
+            <div style={{ whiteSpace: "pre-line", color: "#444", fontSize: 10, lineHeight: 1.5, marginTop: 3 }}>
+              {quote.notes}
+            </div>
           </div>
         )}
 
-        <PrintFooter showSignatures />
+        {/* No signature block — a proforma is a quotation, not a signed document. */}
+
+        {/* Footer */}
+        <div style={{ marginTop: 26, textAlign: "center" }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700 }}>Thank you for your business!</div>
+          <div style={{ fontSize: 8.5, color: "#888", marginTop: 3 }}>
+            {COMPANY.headOffice} &nbsp;&middot;&nbsp; {COMPANY.tel}
+          </div>
+          <div style={{ fontSize: 8, color: "#a5a5a5", marginTop: 4, fontStyle: "italic" }}>
+            This is a Proforma Invoice and not a receipt of payment. No refund of money after payment.
+          </div>
+        </div>
       </div>
+
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: 6,
+          background: BRAND_RED,
+          ...exactPrint,
+        } as React.CSSProperties}
+      />
     </div>
   );
 });
