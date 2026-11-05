@@ -95,11 +95,24 @@
     @apply border-border;
   }
 
+  html {
+    /* iOS ignores user-scalable=no, so pinch-zoom is disabled here as well.
+       pan-x/pan-y keeps ordinary scrolling and horizontal panes working. */
+    touch-action: pan-x pan-y;
+    overflow-x: hidden;
+    width: 100%;
+    /* Stop iOS inflating text in landscape, which pushes layouts off-screen. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
   body {
     @apply bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary;
     font-family: 'Poppins', 'Inter', sans-serif;
+    touch-action: pan-x pan-y;
     overflow-x: hidden;
     width: 100%;
+    max-width: 100vw;
     -webkit-tap-highlight-color: transparent;
     /* Pairs with viewport-fit=cover so content clears the notch / rounded corners. */
     padding-left: env(safe-area-inset-left);
@@ -139,6 +152,37 @@
   .table-container {
     @apply w-full overflow-x-auto custom-scrollbar;
     -webkit-overflow-scrolling: touch;
+  }
+
+  /* === A4 DOCUMENT SHEETS ON SMALL SCREENS ===
+     Receipts, invoices and proformas are laid out at a true A4 width (210mm
+     ~ 794px). On a phone that is far wider than the screen, so the sheet used
+     to be cut off and had to be panned or zoomed out to read.
+
+     Here the sheet keeps its real A4 width — so it looks exactly like the
+     printed document — and is scaled down to the screen width instead. `zoom`
+     (unlike `transform: scale`) also shrinks the space the element occupies,
+     so nothing is left overflowing.
+
+     `screen and` matters: without it this would also match while printing,
+     where the page box is about 794px wide, and would shrink the print-out. */
+  @media screen and (max-width: 840px) {
+    .print-document-page {
+      width: 210mm !important;
+      min-width: 210mm;
+      max-width: none;
+      /* `--doc-zoom` is kept in step with the viewport by <DocumentScaleSync />.
+         It cannot be computed here: `zoom` needs a unitless number, and
+         `calc(100vw / 794)` produces a length, which the browser discards. */
+      zoom: var(--doc-zoom, 1);
+      margin-left: auto !important;
+      margin-right: auto !important;
+    }
+
+    /* The sheet now fits, so its wrapper must not keep a sideways scroll. */
+    .print-pages-container {
+      overflow-x: hidden !important;
+    }
   }
 }
 

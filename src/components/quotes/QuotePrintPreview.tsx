@@ -379,9 +379,6 @@ export function QuotePrintPreview({ quote, onBack, onDownloadPdf }: QuotePrintPr
   return (
     <div className="animate-fade-up max-w-4xl mx-auto pb-12 print:p-0 print:m-0">
       <style dangerouslySetInnerHTML={{ __html: `
-        @media (max-width: 768px) {
-          .print-document-page { zoom: calc(100vw / 850); margin: 0 auto !important; }
-        }
         @media print {
           @page { margin: 0; size: A4; }
           html, body, #root, [class*="overflow-"], [class*="h-["] {

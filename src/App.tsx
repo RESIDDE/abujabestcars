@@ -11,6 +11,7 @@ import { ThemeProvider } from "next-themes";
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { DocumentScaleSync } from "@/hooks/useDocumentScale";
 
 /**
  * React.lazy with one retry, then a single forced reload.
@@ -175,6 +176,8 @@ const App = () => (
         <BrowserRouter>
           {/* Single global Realtime listener — must be inside QueryClientProvider */}
           <PermissionsRealtimeSync />
+          {/* Keeps A4 document sheets scaled to the screen on phones */}
+          <DocumentScaleSync />
           {/* Outer boundary also covers the public routes (/auth, /portal, /sign/*),
               which render lazy pages outside the in-layout Suspense below. */}
           <RouteErrorBoundary>
