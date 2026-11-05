@@ -1,9 +1,11 @@
 import { toast } from "sonner";
 import { getPrintHeaderHTML, getPrintWatermarkHTML } from "@/components/PrintHeader";
 import { getPrintFooterHTML } from "@/components/PrintFooter";
+import { logAction } from "@/lib/logger";
 
 export function exportToCSV(data: Record<string, any>[], filename: string) {
   if (data.length === 0) { toast.error("No data to export"); return; }
+  logAction("EXPORT", filename, null, { format: "CSV", count: data.length });
   const headers = Object.keys(data[0]);
   const csvRows = [];
   
@@ -25,6 +27,7 @@ export function exportToCSV(data: Record<string, any>[], filename: string) {
 
 export function exportToExcel(data: Record<string, any>[], filename: string) {
   if (data.length === 0) { toast.error("No data to export"); return; }
+  logAction("EXPORT", filename, null, { format: "Excel", count: data.length });
   const headers = Object.keys(data[0]);
   
   // Create a simple HTML table for Excel
@@ -69,10 +72,12 @@ function downloadFileBlob(blob: Blob, filename: string) {
 
 export function exportToJSON(data: Record<string, any>[], filename: string) {
   if (data.length === 0) { toast.error("No data to export"); return; }
+  logAction("EXPORT", filename, null, { format: "JSON", count: data.length });
   downloadFile(JSON.stringify(data, null, 2), `${filename}.json`, "application/json");
 }
 
 export function printHTMLDocument(title: string, htmlBody: string) {
+  logAction("PRINT", title, null, { title, ref: title });
   const fullHTML = `
     <!DOCTYPE html>
     <html>
@@ -154,6 +159,7 @@ export function printHTMLDocument(title: string, htmlBody: string) {
 
 export async function exportHTMLToPDF(title: string, filename: string, htmlBody: string) {
   toast.info("Generating PDF Document...");
+  logAction("EXPORT", filename, null, { format: "PDF", title, ref: filename });
   const fullHTML = `
     <!DOCTYPE html>
     <html>

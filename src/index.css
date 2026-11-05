@@ -5,13 +5,12 @@
 @layer base {
   :root {
     /* Chart series. Validated for colourblind separation and contrast against
-       both surfaces; see the data-viz palette. Dark steps are the same hues
-       re-stepped for the dark surface, not an inversion. */
-    --chart-rev: #2a78d6;
-    --chart-prof: #1baf7a;
-    --chart-exp: #eb6834;
-    --chart-grid: #e6e5e0;
-    --chart-ink: #85857c;
+       both surfaces; see the data-viz palette. */
+    --chart-rev: #059669;
+    --chart-prof: #6366f1;
+    --chart-exp: #f97316;
+    --chart-grid: #e2e8f0;
+    --chart-ink: #64748b;
 
     --background: 210 20% 98%;
     --foreground: 222 47% 11%;
@@ -19,30 +18,30 @@
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-    --primary: 230 100% 65%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 214 32% 93%;
+    --primary: 73 100% 45%;
+    --primary-foreground: 0 0% 0%;
+    --secondary: 215 25% 93%;
     --secondary-foreground: 222 47% 11%;
-    --muted: 214 20% 93%;
+    --muted: 215 25% 93%;
     --muted-foreground: 215 16% 47%;
-    --accent: 214 32% 93%;
-    --accent-foreground: 222 47% 11%;
+    --accent: 253 88% 66%;
+    --accent-foreground: 0 0% 100%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 214 20% 88%;
-    --input: 214 20% 88%;
-    --ring: 230 100% 65%;
-    --radius: 1rem;
-    --sidebar-background: 0 0% 99%;
+    --border: 214 24% 88%;
+    --input: 214 24% 88%;
+    --ring: 73 100% 45%;
+    --radius: 1.25rem;
+    --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 222 47% 11%;
-    --sidebar-primary: 230 100% 65%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 214 32% 93%;
+    --sidebar-primary: 73 100% 45%;
+    --sidebar-primary-foreground: 0 0% 0%;
+    --sidebar-accent: 215 25% 93%;
     --sidebar-accent-foreground: 222 47% 11%;
-    --sidebar-border: 214 20% 88%;
-    --sidebar-ring: 230 100% 65%;
-    --gradient-start: 230 100% 65%;
-    --gradient-end: 280 100% 65%;
+    --sidebar-border: 214 24% 88%;
+    --sidebar-ring: 73 100% 45%;
+    --gradient-start: 73 100% 45%;
+    --gradient-end: 253 88% 66%;
     --success: 142 76% 36%;
     --success-foreground: 0 0% 100%;
     --warning: 38 92% 50%;
@@ -50,42 +49,42 @@
   }
 
   .dark {
-    --chart-rev: #3987e5;
-    --chart-prof: #199e70;
-    --chart-exp: #d95926;
-    --chart-grid: #2e2e33;
-    --chart-ink: #77776f;
-    --background: 0 0% 4%;
-    --foreground: 210 40% 97%;
-    --card: 222 47% 8%;
-    --card-foreground: 210 40% 97%;
-    --popover: 222 47% 8%;
-    --popover-foreground: 210 40% 97%;
-    --primary: 230 100% 65%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 217 33% 14%;
-    --secondary-foreground: 210 40% 97%;
-    --muted: 217 33% 14%;
-    --muted-foreground: 215 20% 60%;
-    --accent: 230 100% 65%;
-    --accent-foreground: 0 0% 100%;
+    --chart-rev: #d4ff32;
+    --chart-prof: #9d84f6;
+    --chart-exp: #ff8544;
+    --chart-grid: #2e3138;
+    --chart-ink: #8e919f;
+    --background: 225 9% 9%;
+    --foreground: 210 20% 98%;
+    --card: 225 10% 15%;
+    --card-foreground: 210 20% 98%;
+    --popover: 225 10% 15%;
+    --popover-foreground: 210 20% 98%;
+    --primary: 73 100% 60%;
+    --primary-foreground: 0 0% 0%;
+    --secondary: 225 10% 18%;
+    --secondary-foreground: 210 20% 98%;
+    --muted: 225 10% 18%;
+    --muted-foreground: 225 10% 60%;
+    --accent: 253 88% 74%;
+    --accent-foreground: 0 0% 0%;
     --destructive: 0 63% 45%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217 33% 14%;
-    --input: 217 33% 14%;
-    --ring: 230 100% 65%;
-    --sidebar-background: 222 47% 6%;
-    --sidebar-foreground: 210 40% 90%;
-    --sidebar-primary: 230 100% 65%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 217 33% 12%;
-    --sidebar-accent-foreground: 210 40% 97%;
-    --sidebar-border: 217 33% 12%;
-    --sidebar-ring: 230 100% 65%;
-    --gradient-start: 230 100% 65%;
-    --gradient-end: 280 100% 65%;
-    --success: 142 76% 36%;
-    --success-foreground: 0 0% 100%;
+    --border: 222 10% 20%;
+    --input: 222 10% 20%;
+    --ring: 73 100% 60%;
+    --sidebar-background: 225 9% 10%;
+    --sidebar-foreground: 210 20% 90%;
+    --sidebar-primary: 73 100% 60%;
+    --sidebar-primary-foreground: 0 0% 0%;
+    --sidebar-accent: 225 10% 16%;
+    --sidebar-accent-foreground: 210 20% 98%;
+    --sidebar-border: 222 10% 18%;
+    --sidebar-ring: 73 100% 60%;
+    --gradient-start: 73 100% 60%;
+    --gradient-end: 253 88% 74%;
+    --success: 73 100% 60%;
+    --success-foreground: 0 0% 0%;
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
   }
@@ -146,31 +145,31 @@
 @layer components {
   /* === GLASS CARD === */
   .glass-card {
-    @apply bg-card/85 dark:bg-white/5 backdrop-blur-xl border border-border/80 dark:border-white/10 shadow-lg dark:shadow-xl dark:shadow-black/40 rounded-2xl transition-all duration-300;
+    @apply bg-white/90 dark:bg-[#212328] backdrop-blur-xl border border-slate-200/80 dark:border-[#2e3138] shadow-sm dark:shadow-xl dark:shadow-black/30 rounded-3xl transition-all duration-300;
   }
 
   .glass-card:hover {
-    @apply border-primary/40 shadow-xl shadow-primary/5;
+    @apply border-[#a3e600] dark:border-[#d4ff32]/40 shadow-md dark:shadow-2xl;
   }
 
   /* === BENTO CARD — premium responsive card === */
   .bento-card {
-    @apply relative overflow-hidden rounded-3xl bg-card/90 dark:bg-white/5 backdrop-blur-2xl border border-border/80 dark:border-white/10 shadow-md dark:shadow-xl transition-all duration-300;
+    @apply relative overflow-hidden rounded-3xl bg-white dark:bg-[#212328] border border-slate-200/80 dark:border-[#2e3138] shadow-sm dark:shadow-xl dark:shadow-black/30 transition-all duration-300;
   }
 
-  /* `.no-hover` opts a card out entirely. The Advanced Report uses it so that
-     nothing on the page reacts to the pointer. */
+  /* `.no-hover` opts a card out entirely. */
   .bento-card:not(.no-hover):hover {
-    @apply border-border dark:border-white/15;
-    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.08);
+    @apply border-[#a3e600] dark:border-[#d4ff32]/40;
+    box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.08), 0 0 15px rgba(212, 255, 50, 0.08);
   }
   .dark .bento-card:not(.no-hover):hover {
-    box-shadow: 0 20px 60px -15px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255,255,255,0.06);
+    @apply border-[#d4ff32]/40;
+    box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), 0 0 15px rgba(212, 255, 50, 0.05);
   }
 
   /* === GLASS PANEL === */
   .glass-panel {
-    @apply bg-card/95 dark:bg-white/5 backdrop-blur-md border border-border/80 dark:border-white/10 shadow-sm rounded-2xl;
+    @apply bg-white/95 dark:bg-[#212328] backdrop-blur-md border border-slate-200 dark:border-[#2e3138] shadow-sm dark:shadow-lg rounded-3xl;
   }
 
   /* === GRADIENT TEXT === */
@@ -257,11 +256,21 @@
   50%       { opacity: 0.30; }
 }
 
-/* Recharts tooltip gets our dark glass panel style */
+/* Recharts tooltip styling */
 .recharts-tooltip-wrapper .recharts-default-tooltip {
-  background: rgba(15,17,26,0.95) !important;
-  border: 1px solid rgba(255,255,255,0.1) !important;
+  background: rgba(255, 255, 255, 0.98) !important;
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
   border-radius: 12px !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08) !important;
+  color: #0f172a !important;
+}
+
+.dark .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: rgba(21, 23, 28, 0.96) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 20px 30px -10px rgba(0, 0, 0, 0.5) !important;
+  color: #f3f4f6 !important;
 }
 
 @media print {

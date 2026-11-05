@@ -22,6 +22,7 @@ import { CustomerSelect } from "@/components/CustomerSelect";
 import { CurrencyInput } from "@/components/CurrencyInput";
 import { useCustomerDuplicates } from "@/hooks/useCustomerDuplicates";
 import { CustomerSuggestion } from "@/components/CustomerSuggestion";
+import { QuotePrintPreview } from "@/components/quotes/QuotePrintPreview";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { canEdit, canCreate } from "@/lib/permissions";
@@ -38,7 +39,8 @@ import { format, subMonths } from "date-fns";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Download, Mail, ArrowLeft } from "lucide-react";
+import { Download, ArrowLeft, ChevronRight, LayoutGrid, List, Users, CheckCircle } from "lucide-react";
+import { CustomPagination } from "@/components/CustomPagination";
 
 // Conditions that legacy descriptions prefixed onto the vehicle title.
 // They now live on their own "Condition:" line underneath the vehicle.
@@ -128,6 +130,10 @@ export default function PerformanceQuotes() {
   const [selectedWeek, setSelectedWeek] = useState<string>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingQuote, setEditingQuote] = useState<any>(null);
+  const [previewQuote, setPreviewQuote] = useState<any>(null);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(8);
+  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   
   const emptyForm = {
     customerMode: "existing" as "existing" | "manual",
@@ -501,11 +507,10 @@ export default function PerformanceQuotes() {
     }));
   };
 
-  const downloadQuotePDF = async (quote: any, isEmail = false) => {
+  const downloadQuotePDF = async (quote: any) => {
     const filename = `quote-${quote.id.slice(0,8)}-${Date.now()}`;
     try {
-      if (isEmail) toast.loading("Preparing quote link for email...", { id: "quote-dl" });
-      else toast.loading("Preparing quote download...", { id: "quote-dl" });
+      toast.loading("Preparing quote download...", { id: "quote-dl" });
 
       let logoBase64 = '';
       try {
@@ -674,31 +679,9 @@ export default function PerformanceQuotes() {
       
       document.body.removeChild(iframe);
 
-      if (isEmail) {
-        const pdfBlob = pdf.output('blob');
-        const filePath = `quotes/${quote.id}/${filename}.pdf`;
-        const { error: uploadError } = await supabase.storage.from('documents').upload(filePath, pdfBlob);
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(filePath);
-        
-        // Update DB
-        await supabase.from("performance_quotes" as any).update({ quote_url: publicUrl }).eq("id", quote.id);
-
-        if (quote.customers?.email) {
-          const subject = `Proforma Invoice - Lamido Cars`;
-          const body = `Hello ${quote.customers.name},\n\nPlease find your proforma invoice attached.\n\nDownload here: ${publicUrl}\n\nThank you!`;
-          window.location.href = `mailto:${quote.customers.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-          toast.success("Invoice generated and email ready!", { id: "quote-dl" });
-        } else {
-          toast.error("Customer email not found.", { id: "quote-dl" });
-        }
-        logAction("EXPORT", "Proforma Invoice", quote.id, { customer: quote.customers?.name, format: "PDF", method: "Email" });
-      } else {
-        pdf.save(`${filename}.pdf`);
-        logAction("EXPORT", "Proforma Invoice", quote.id, { customer: quote.customers?.name, format: "PDF", method: "Download" });
-        toast.success("Invoice downloaded!", { id: "quote-dl" });
-      }
+      pdf.save(`${filename}.pdf`);
+      logAction("EXPORT", "Proforma Invoice", quote.id, { customer: quote.customers?.name, format: "PDF", method: "Download" });
+      toast.success("Invoice downloaded!", { id: "quote-dl" });
     } catch (error) {
       console.error(error);
       toast.error("Failed to generate quote", { id: "quote-dl" });
@@ -706,8 +689,9 @@ export default function PerformanceQuotes() {
   };
 
   const handlePrint = (quote: any) => {
-    toast.info("Preparing quote document...");
     logAction("PRINT", "Proforma Invoice", quote.id, { customer: quote.customers?.name });
+    setPreviewQuote(quote);
+    return;
     const html = `<html><head><title>Proforma Invoice - ${quote.id.slice(0,8).toUpperCase()}</title>
     <style>
       @page { margin: 0; size: A4; }
@@ -907,6 +891,19 @@ export default function PerformanceQuotes() {
     [filteredQuotes]
   );
 
+  const totalPages = Math.max(1, Math.ceil(filteredQuotes.length / pageSize));
+  const pagedQuotes = filteredQuotes.slice(page * pageSize, (page + 1) * pageSize);
+
+  if (previewQuote) {
+    return (
+      <QuotePrintPreview
+        quote={previewQuote}
+        onBack={() => setPreviewQuote(null)}
+        onDownloadPdf={() => downloadQuotePDF(previewQuote, false)}
+      />
+    );
+  }
+
   return (
     <div className="space-y-8 animate-fade-up pb-10 max-w-6xl mx-auto">
       {/* Header */}
@@ -955,23 +952,24 @@ export default function PerformanceQuotes() {
       </div>
 
       {/* List */}
-      <div className="bento-card overflow-hidden">
-        <div className="p-4 border-b border-border/30 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+      <div className="space-y-4">
+        {/* Filter Bar with View Mode Toggle */}
+        <div className="bento-card p-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
           <div className="relative w-full sm:max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <Input 
               placeholder="Search quotes by customer or ID..." 
               value={search} 
-              onChange={(e) => setSearch(e.target.value)} 
-              className="pl-10"
+              onChange={(e) => { setSearch(e.target.value); setPage(0); }} 
+              className="pl-10 h-10 rounded-xl bg-background/50 border-white/10"
             />
           </div>
-          <div className="flex gap-2 shrink-0 flex-wrap sm:flex-nowrap">
-            <Select value={selectedMonth} onValueChange={(v) => { setSelectedMonth(v); }}>
-              <SelectTrigger className="w-[160px] h-10 rounded-xl focus-visible:ring-emerald-500 text-sm">
+          <div className="flex gap-2 shrink-0 flex-wrap sm:flex-nowrap items-center">
+            <Select value={selectedMonth} onValueChange={(v) => { setSelectedMonth(v); setPage(0); }}>
+              <SelectTrigger className="w-[150px] h-10 rounded-xl bg-background/50 border-white/10 text-sm">
                 <SelectValue placeholder="Select Month" />
               </SelectTrigger>
-              <SelectContent className="w-[160px] rounded-xl">
+              <SelectContent className="glass-panel w-[150px] rounded-xl">
                 <SelectItem value="all" className="rounded-lg">All Time</SelectItem>
                 {Array.from({ length: 12 }).map((_, i) => {
                   const d = subMonths(new Date(), i);
@@ -984,11 +982,11 @@ export default function PerformanceQuotes() {
               </SelectContent>
             </Select>
 
-            <Select value={selectedWeek} onValueChange={(v) => { setSelectedWeek(v); }}>
-              <SelectTrigger className="w-[120px] h-10 rounded-xl focus-visible:ring-emerald-500 text-sm">
+            <Select value={selectedWeek} onValueChange={(v) => { setSelectedWeek(v); setPage(0); }}>
+              <SelectTrigger className="w-[110px] h-10 rounded-xl bg-background/50 border-white/10 text-sm">
                 <SelectValue placeholder="All Weeks" />
               </SelectTrigger>
-              <SelectContent className="w-[120px] rounded-xl">
+              <SelectContent className="glass-panel w-[110px] rounded-xl">
                 <SelectItem value="all" className="rounded-lg">All Weeks</SelectItem>
                 <SelectItem value="1" className="rounded-lg">Week 1</SelectItem>
                 <SelectItem value="2" className="rounded-lg">Week 2</SelectItem>
@@ -997,136 +995,278 @@ export default function PerformanceQuotes() {
                 <SelectItem value="5" className="rounded-lg">Week 5</SelectItem>
               </SelectContent>
             </Select>
+
+            {/* View Mode Toggle: Cards (Split Panel) vs Table */}
+            <div className="flex items-center bg-muted/60 dark:bg-white/5 p-1 rounded-xl border border-white/10 ml-auto sm:ml-0">
+              <Button
+                type="button"
+                variant={viewMode === "cards" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("cards")}
+                className={`h-8 px-3 rounded-lg text-xs font-semibold gap-1.5 transition-all ${
+                  viewMode === "cards" 
+                    ? "bg-[#181d2f] text-white dark:bg-white dark:text-slate-900 shadow-sm" 
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span>Cards</span>
+              </Button>
+              <Button
+                type="button"
+                variant={viewMode === "table" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("table")}
+                className={`h-8 px-3 rounded-lg text-xs font-semibold gap-1.5 transition-all ${
+                  viewMode === "table" 
+                    ? "bg-[#181d2f] text-white dark:bg-white dark:text-slate-900 shadow-sm" 
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <List className="w-3.5 h-3.5" />
+                <span>Table</span>
+              </Button>
+            </div>
           </div>
         </div>
 
         {loadingQuotes ? (
-          <div className="p-8 text-center text-muted-foreground">Loading quotes...</div>
-        ) : filteredQuotes.length === 0 ? (
-          <div className="p-12 text-center text-muted-foreground flex flex-col items-center">
-            <FileSignature className="h-12 w-12 opacity-20 mb-4" />
-            <p>No performance quotes found.</p>
+          <div className="space-y-4">
+            {[1, 2, 3].map(i => <div key={i} className="h-28 w-full rounded-2xl bg-card/40 animate-pulse border border-white/5" />)}
           </div>
-        ) : (
-          <>
-            <div className="hidden md:block table-container">
-            <Table className="w-full">
-              <TableHeader className="bg-foreground/5 pointer-events-none">
-                <TableRow className="border-border/50 hover:bg-transparent">
-                  <TableHead className="font-semibold px-6 py-4">Quote ID</TableHead>
-                  <TableHead className="font-semibold">Customer</TableHead>
-                  <TableHead className="font-semibold">Date</TableHead>
-                  <TableHead className="font-semibold">Vehicles</TableHead>
-                  <TableHead className="font-semibold text-right">Total Amount</TableHead>
-                  <TableHead className="text-right font-semibold px-6">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredQuotes.map((q: any) => (
-                  <TableRow key={q.id} className="border-border/30 hover:bg-muted/40 transition-colors group">
-                    <TableCell className="px-6 py-4 font-mono text-xs font-semibold text-emerald-500">
-                      PQ-{q.id.slice(0, 8).toUpperCase()}
-                    </TableCell>
-                    <TableCell className="font-medium">{q.customers?.name || "Unknown"}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{new Date(q.quote_date).toLocaleDateString()}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1 bg-muted px-2 py-1 rounded-md w-fit text-xs font-semibold">
-                        <Car className="h-3 w-3" /> {q.performance_quote_items?.length || 0}
+        ) : filteredQuotes.length === 0 ? (
+          <div className="bento-card p-12 text-center text-muted-foreground flex flex-col items-center justify-center">
+            <FileSignature className="h-12 w-12 opacity-20 mb-4 text-emerald-500" />
+            <p className="font-semibold text-base mb-1">No proforma quotes found.</p>
+            <p className="text-xs text-muted-foreground mb-4">No quotes match your search or filter parameters.</p>
+            {(search || selectedMonth !== "all" || selectedWeek !== "all") && (
+              <Button variant="link" onClick={() => { setSearch(""); setSelectedMonth("all"); setSelectedWeek("all"); setPage(0); }} className="text-emerald-500 text-xs font-semibold">
+                Clear all filters
+              </Button>
+            )}
+          </div>
+        ) : viewMode === "cards" ? (
+          /* Split-Panel Quotes Cards Modeled After Reference Design */
+          <div className="space-y-4">
+            {pagedQuotes.map((q: any) => {
+              const quoteId = `PQ-${q.id.slice(0, 8).toUpperCase()}`;
+              const custName = q.customers?.name || "Customer Not Specified";
+              const quoteDateStr = new Date(q.quote_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+              const totalAmt = Number(q.total_amount) || 0;
+              const itemCount = q.performance_quote_items?.length || 0;
+              const firstItem = q.performance_quote_items?.[0];
+              const vehicleTitle = firstItem?.vehicles 
+                ? `${firstItem.vehicles.year || ''} ${firstItem.vehicles.make} ${firstItem.vehicles.model}`.trim()
+                : firstItem?.vehicle_description || "Fleet Vehicle Package";
+
+              return (
+                <div 
+                  key={q.id}
+                  className="rounded-[22px] overflow-hidden border border-border/50 dark:border-white/10 bg-white dark:bg-[#151a26] shadow-md hover:shadow-xl transition-all flex flex-col md:flex-row group"
+                >
+                  {/* Left Contrast Section: Solid dark container */}
+                  <div className="w-full md:w-[32%] lg:w-[28%] bg-[#111728] dark:bg-[#0c101a] text-white p-5 md:p-6 flex flex-col justify-between shrink-0 relative">
+                    <div>
+                      <div className="flex items-center justify-between mb-2.5">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                          PROFORMA INVOICE
+                        </span>
+                        <span className="text-[10px] font-mono text-emerald-400 font-bold">
+                          {quoteId}
+                        </span>
                       </div>
-                    </TableCell>
-                    <TableCell className="text-right font-bold">₦{Number(q.total_amount).toLocaleString()}</TableCell>
-                    <TableCell className="text-right px-6">
-                      <div className="flex justify-end gap-1 opacity-50 group-hover:opacity-100 transition-opacity">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-emerald-500/20 hover:text-emerald-500">
-                              <Printer className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="rounded-xl p-1">
-                            <DropdownMenuItem onClick={() => handlePrint(q)} className="rounded-lg cursor-pointer gap-2">
-                              <Printer className="h-4 w-4 text-emerald-500" /> Print Quote
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => downloadQuotePDF(q, false)} className="rounded-lg cursor-pointer gap-2">
-                              <Download className="h-4 w-4 text-amber-500" /> Save as PDF
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => downloadQuotePDF(q, true)} className="rounded-lg cursor-pointer gap-2">
-                              <Mail className="h-4 w-4 text-sky-500" /> Email to Customer
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+
+                      <h3 className="text-base md:text-lg font-bold text-white leading-snug tracking-tight group-hover:text-amber-400 transition-colors">
+                        {custName}
+                      </h3>
+
+                      <p className="text-[11px] text-slate-400 mt-2 flex items-center gap-1.5 truncate">
+                        <Car className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="truncate text-slate-200">{vehicleTitle}</span>
+                        {itemCount > 1 && (
+                          <span className="text-[10px] px-1.5 py-0.2 bg-white/10 rounded-full font-mono">
+                            +{itemCount - 1} more
+                          </span>
+                        )}
+                      </p>
+                    </div>
+
+                    {/* Bottom link modeled after "View all chapters >" */}
+                    <div className="mt-5 pt-3 border-t border-white/10">
+                      <div 
+                        className="flex items-center justify-between text-xs text-slate-300 font-medium group/link cursor-pointer hover:text-white transition-colors"
+                        title={q.customers?.phone || q.customers?.email || custName}
+                      >
+                        <div className="flex items-center gap-1.5 truncate">
+                          <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="truncate">{q.customers?.phone || q.customers?.email || "Direct Proposal"}</span>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-slate-400 shrink-0 transition-transform group-hover/link:translate-x-0.5" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Content Section */}
+                  <div className="flex-1 p-5 md:p-6 flex flex-col justify-between gap-5 bg-card dark:bg-[#151a26]">
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                          DATE ISSUED • {quoteDateStr}
+                        </p>
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <h2 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">
+                            ₦{totalAmt.toLocaleString()}
+                          </h2>
+                          <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">
+                            <CheckCircle className="w-3 h-3 text-emerald-500" />
+                            {itemCount} {itemCount === 1 ? "Vehicle" : "Vehicles"} Quoted
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Progress / Status indicator matching reference */}
+                      <div className="flex flex-col sm:items-end gap-1.5">
+                        <div className="w-36 sm:w-44 h-2 bg-muted/60 dark:bg-white/10 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full bg-emerald-500 w-full" />
+                        </div>
+                        <p className="text-[11px] font-semibold text-muted-foreground">
+                          {Number(q.vat_percentage) > 0 ? `Includes ${q.vat_percentage}% VAT` : "Standard Quote"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Bottom Action Pill Buttons matching reference */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-border/40 dark:border-white/5">
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => downloadQuotePDF(q)}
+                          className="rounded-full px-4 h-9 border-border/60 hover:bg-muted font-semibold text-xs tracking-wide transition-all gap-1.5"
+                        >
+                          <Download className="w-3.5 h-3.5 text-muted-foreground" />
+                          Save PDF
+                        </Button>
+
                         {hasEdit && (
-                          <>
-                            <Button variant="ghost" size="icon" onClick={() => openEditDialog(q)} className="h-8 w-8 rounded-lg hover:bg-blue-500/20 hover:text-blue-500">
-                              <Pencil className="h-4 w-4" />
+                          <div className="flex items-center gap-1">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => openEditDialog(q)} 
+                              className="rounded-full h-9 w-9 hover:bg-muted text-muted-foreground hover:text-foreground"
+                              title="Edit Quote"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => deleteQuoteMutation.mutate(q.id)} className="h-8 w-8 rounded-lg hover:bg-destructive/20 hover:text-destructive">
-                              <Trash2 className="h-4 w-4" />
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => deleteQuoteMutation.mutate(q.id)} 
+                              className="rounded-full h-9 w-9 hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                              title="Delete Quote"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
                             </Button>
-                          </>
+                          </div>
                         )}
                       </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
 
-          {/* Mobile Card View */}
-          <div className="md:hidden divide-y divide-border/30">
-            {filteredQuotes.map((q: any) => (
-              <div key={q.id} className="p-4 space-y-4">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-bold text-sm tracking-tight">{q.customers?.name || "Unknown Customer"}</p>
-                    <p className="text-[10px] text-emerald-500 font-mono font-bold mt-0.5 uppercase tracking-widest">PQ-{q.id.slice(0, 8)}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-sm text-foreground">₦{Number(q.total_amount).toLocaleString()}</p>
-                    <p className="text-[10px] text-muted-foreground">{new Date(q.quote_date).toLocaleDateString()}</p>
+                      {/* Primary Pill Button exactly like Continue in reference */}
+                      <Button
+                        size="sm"
+                        onClick={() => handlePrint(q)}
+                        className="rounded-full px-6 h-9 bg-[#181d2f] hover:bg-[#252c42] dark:bg-white dark:hover:bg-slate-200 text-white dark:text-slate-900 font-bold text-xs tracking-wide shadow-lg shadow-black/20 hover:shadow-xl transition-all active:scale-95 gap-2"
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                        Print Invoice
+                      </Button>
+                    </div>
                   </div>
                 </div>
-                
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                    <Car className="h-3 w-3 text-emerald-500" />
-                    <span className="text-[9px] font-bold text-emerald-500 uppercase">{q.performance_quote_items?.length || 0} Vehicles</span>
-                  </div>
-                  
-                  <div className="flex gap-1">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 rounded-lg hover:bg-emerald-500/10 text-emerald-500">
-                          <Download className="h-3.5 w-3.5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="rounded-xl p-1">
-                        <DropdownMenuItem onClick={() => downloadQuotePDF(q, false)} className="rounded-lg cursor-pointer gap-2 text-xs">
-                          <Download className="h-4 w-4 text-amber-500" /> PDF Quote
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handlePrint(q)} className="rounded-lg cursor-pointer gap-2 text-xs">
-                          <Printer className="h-4 w-4 text-emerald-500" /> Print
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    
-                    {hasEdit && (
-                      <>
-                        <Button variant="ghost" size="sm" onClick={() => openEditDialog(q)} className="h-8 rounded-lg hover:bg-blue-500/10 text-blue-500">
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => deleteQuoteMutation.mutate(q.id)} className="h-8 rounded-lg hover:bg-destructive/20 text-destructive">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
+          </div>
+        ) : (
+          /* Table View */
+          <div className="bento-card overflow-hidden">
+            <div className="table-container">
+              <Table className="w-full">
+                <TableHeader className="bg-foreground/5 pointer-events-none">
+                  <TableRow className="border-border/50 hover:bg-transparent">
+                    <TableHead className="font-semibold px-6 py-4">Quote ID</TableHead>
+                    <TableHead className="font-semibold">Customer</TableHead>
+                    <TableHead className="font-semibold">Date</TableHead>
+                    <TableHead className="font-semibold">Vehicles</TableHead>
+                    <TableHead className="font-semibold text-right">Total Amount</TableHead>
+                    <TableHead className="text-right font-semibold px-6">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pagedQuotes.map((q: any) => (
+                    <TableRow key={q.id} className="border-border/30 hover:bg-muted/40 transition-colors group">
+                      <TableCell className="px-6 py-4 font-mono text-xs font-semibold text-emerald-500">
+                        PQ-{q.id.slice(0, 8).toUpperCase()}
+                      </TableCell>
+                      <TableCell className="font-medium">{q.customers?.name || "Unknown"}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{new Date(q.quote_date).toLocaleDateString()}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1 bg-muted px-2 py-1 rounded-md w-fit text-xs font-semibold">
+                          <Car className="h-3 w-3" /> {q.performance_quote_items?.length || 0}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right font-bold">₦{Number(q.total_amount).toLocaleString()}</TableCell>
+                      <TableCell className="text-right px-6">
+                        <div className="flex justify-end gap-1 opacity-50 group-hover:opacity-100 transition-opacity">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-emerald-500/20 hover:text-emerald-500">
+                                <Printer className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="rounded-xl p-1">
+                              <DropdownMenuItem onClick={() => handlePrint(q)} className="rounded-lg cursor-pointer gap-2">
+                                <Printer className="h-4 w-4 text-emerald-500" /> Print Quote
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => downloadQuotePDF(q)} className="rounded-lg cursor-pointer gap-2">
+                                <Download className="h-4 w-4 text-amber-500" /> Save as PDF
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          {hasEdit && (
+                            <>
+                              <Button variant="ghost" size="icon" onClick={() => openEditDialog(q)} className="h-8 w-8 rounded-lg hover:bg-blue-500/20 hover:text-blue-500">
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" onClick={() => deleteQuoteMutation.mutate(q.id)} className="h-8 w-8 rounded-lg hover:bg-destructive/20 hover:text-destructive">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
-          </>
+          </div>
+        )}
+
+        {/* Reference-Styled Pagination Component */}
+        {filteredQuotes.length > 0 && (
+          <div className="pt-2">
+            <CustomPagination
+              currentPage={page}
+              totalPages={totalPages}
+              totalItems={filteredQuotes.length}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+              pageSizeOptions={[5, 8, 15, 25, 50]}
+              itemLabel="quotes"
+            />
+          </div>
         )}
       </div>
 
@@ -1473,7 +1613,7 @@ export default function PerformanceQuotes() {
                 <div className="space-y-1">
                   <Label className="text-xs">Account Name</Label>
                   <Input
-                    placeholder="e.g. Lamido Cars Ltd"
+                    placeholder="e.g. Abuja Best Cars"
                     value={form.accountName}
                     onChange={e => setForm(p => ({ ...p, accountName: e.target.value }))}
                   />

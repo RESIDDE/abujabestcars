@@ -21,7 +21,7 @@ import {
 import { toast } from "sonner";
 import { format, subMonths } from "date-fns";
 import { 
-  ChevronRight, ArrowRight, ArrowLeft, Receipt, ClipboardCheck, Wrench, PlusCircle, Clock, DollarSign, PieChart as PieChartIcon, Search, Car, Pencil, QrCode, FileOutput, Trash2, History as HistoryIcon, Check, ChevronsUpDown, Mail, Printer, CreditCard, CheckCircle, Bell, X as XIcon, AlertTriangle as AlertTriangleIcon, Eye, RotateCcw
+  ChevronRight, ArrowRight, ArrowLeft, Receipt, ClipboardCheck, Wrench, PlusCircle, Clock, DollarSign, PieChart as PieChartIcon, Search, Car, Pencil, QrCode, FileOutput, Trash2, History as HistoryIcon, Check, ChevronsUpDown, Download, Printer, CreditCard, CheckCircle, Bell, X as XIcon, AlertTriangle as AlertTriangleIcon, Eye, RotateCcw
 } from "lucide-react";
 import {
   Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList
@@ -47,13 +47,13 @@ import { numberToWords } from "@/lib/numberToWords";
 
 const BANK_ACCOUNTS = {
   servicing: {
-    name: "Lamido Cars Ltd.",
+    name: "Abuja Best Cars",
     account: "1229785752",
     bank: "Zenith Bank",
     label: "Servicing Account"
   },
   painting: {
-    name: "Lamido Cars Ltd.",
+    name: "Abuja Best Cars",
     account: "0126589674",
     bank: "Wema Bank",
     label: "Painting Services Account"
@@ -1127,7 +1127,7 @@ export default function RepairsMaintenance() {
       </div>
     </div>
 
-    <div class="footer-note">Thank you for choosing Lamido Carshop. We appreciate your business!</div>
+    <div class="footer-note">Thank you for choosing Abuja Best Cars. We appreciate your business!</div>
     </body></html>`;
   };
 
@@ -1310,14 +1310,13 @@ export default function RepairsMaintenance() {
   };
 
 
-  const downloadRepairPDF = async (r: Repair, type: 'bill' | 'jobcard', isEmail = false) => {
+  const downloadRepairPDF = async (r: Repair, type: 'bill' | 'jobcard') => {
     const cust = customers.find(c => c.id === r.customer_id);
     const filename = `${type}-${r.job_card_no || r.id}-${Date.now()}`;
 
     try {
       console.log(`Starting ${type} generation for Repair:`, r.id);
-      if (isEmail) toast.loading(`Preparing ${type} link for email...`, { id: "repair-dl" });
-      else toast.loading(`Preparing ${type} download...`, { id: "repair-dl" });
+      toast.loading(`Preparing ${type} download...`, { id: "repair-dl" });
 
       let logoBase64 = '';
       try {
@@ -1376,43 +1375,11 @@ export default function RepairsMaintenance() {
       
       document.body.removeChild(iframe);
 
-      if (isEmail) {
-        const pdfBlob = pdf.output('blob');
-        const storagePath = `${r.customer_id || 'unknown'}/${filename}.pdf`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('documents')
-          .upload(storagePath, pdfBlob, { contentType: 'application/pdf', upsert: true });
-
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = supabase.storage
-          .from('documents')
-          .getPublicUrl(storagePath);
-
-        // Save URL to database
-        const updateData = type === 'bill' ? { bill_url: publicUrl } : { job_card_url: publicUrl };
-        await supabase.from("repairs" as any).update(updateData).eq("id", r.id);
-
-        const veh = vehicles.find(v => v.id === r.vehicle_id);
-        const vehicleLabel = veh ? `${veh.year} ${veh.make} ${veh.model}` : r.vehicle_id;
-        logAction("EXPORT", type === 'bill' ? "Repair Bill" : "Job Card", r.id, { vehicle: vehicleLabel, format: "PDF", method: "Email" });
-        
-        if (cust?.email) {
-          const subject = `${type === 'bill' ? 'Repair Bill' : 'Job Card'} - Lamido Cars`;
-          const body = `Hello ${cust.name || 'Customer'},\n\nPlease find your ${type === 'bill' ? 'repair bill' : 'job card'} attached below.\n\nYou can also download it directly here: ${publicUrl}\n\nThank you for choosing Lamido Cars!`;
-          window.location.href = `mailto:${cust.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-          toast.success("Link generated! Opening email client...", { id: "repair-dl" });
-        } else {
-          toast.error("Customer email not found.", { id: "repair-dl" });
-        }
-      } else {
-        pdf.save(`${filename}.pdf`);
-        const veh = vehicles.find(v => v.id === r.vehicle_id);
-        const vehicleLabel = veh ? `${veh.year} ${veh.make} ${veh.model}` : r.vehicle_id;
-        logAction("EXPORT", type === 'bill' ? "Repair Bill" : "Job Card", r.id, { vehicle: vehicleLabel, format: "PDF", method: "Download" });
-        toast.success(`${type === 'bill' ? 'Bill' : 'Job Card'} downloaded!`, { id: "repair-dl" });
-      }
+      pdf.save(`${filename}.pdf`);
+      const veh = vehicles.find(v => v.id === r.vehicle_id);
+      const vehicleLabel = veh ? `${veh.year} ${veh.make} ${veh.model}` : r.vehicle_id;
+      logAction("EXPORT", type === 'bill' ? "Repair Bill" : "Job Card", r.id, { vehicle: vehicleLabel, format: "PDF", method: "Download" });
+      toast.success(`${type === 'bill' ? 'Bill' : 'Job Card'} downloaded!`, { id: "repair-dl" });
     } catch (error) {
       console.error("Download error:", error);
       toast.error(`Failed to generate ${type}`, { id: "repair-dl" });
@@ -1839,8 +1806,8 @@ export default function RepairsMaintenance() {
                       <DropdownMenuItem onClick={() => printBill(r)} className="rounded-lg cursor-pointer gap-2">
                         <Printer className="h-4 w-4 text-amber-500" /> Print Bill
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => downloadRepairPDF(r, 'bill', true)} className="rounded-lg cursor-pointer gap-2">
-                        <Mail className="h-4 w-4 text-sky-500" /> Email to Customer
+                      <DropdownMenuItem onClick={() => downloadRepairPDF(r, 'bill')} className="rounded-lg cursor-pointer gap-2">
+                        <Download className="h-4 w-4 text-amber-500" /> Save as PDF
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -1855,8 +1822,8 @@ export default function RepairsMaintenance() {
                       <DropdownMenuItem onClick={() => printJobCard(r)} className="rounded-lg cursor-pointer gap-2">
                         <Printer className="h-4 w-4 text-emerald-500" /> Print Job Card
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => downloadRepairPDF(r, 'jobcard', true)} className="rounded-lg cursor-pointer gap-2">
-                        <Mail className="h-4 w-4 text-sky-500" /> Email to Customer
+                      <DropdownMenuItem onClick={() => downloadRepairPDF(r, 'jobcard')} className="rounded-lg cursor-pointer gap-2">
+                        <Download className="h-4 w-4 text-emerald-500" /> Save as PDF
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>

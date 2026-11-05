@@ -32,7 +32,7 @@ import {
 import { logAction, describeLog } from "@/lib/logger";
 import { exportToExcel } from "@/lib/exportHelpers";
 
-type Tab = "team" | "permissions" | "system" | "audit";
+type Tab = "team" | "permissions" | "audit";
 
 const DEFAULT_ROLE_LABELS: Record<string, string> = {
   admin: "Admin",
@@ -288,6 +288,25 @@ export default function Settings() {
     },
     enabled: tab === "audit",
   });
+
+  // Subscribe to live audit log inserts in real-time
+  useEffect(() => {
+    if (tab !== "audit") return;
+    const channel = supabase
+      .channel("audit_logs_realtime_stream")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "audit_logs" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["audit_logs"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [tab, queryClient]);
 
   const filteredLogs = useMemo(() => {
     return logs.filter((log: any) => {
@@ -643,7 +662,7 @@ export default function Settings() {
               Settings & Administration
             </h1>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Configure user roles, access permissions, system intervals, and security logs.
+              Configure user roles, access permissions, and security audit logs.
             </p>
           </div>
         </div>
@@ -665,7 +684,6 @@ export default function Settings() {
         {[
           ["team", "Team Accounts", <Users className="w-4 h-4 shrink-0" />],
           ["permissions", "Access Matrix", <Shield className="w-4 h-4 shrink-0" />],
-          ["system", "System Config", <Bell className="w-4 h-4 shrink-0" />],
           ["audit", "Audit Logs", <Activity className="w-4 h-4 shrink-0" />],
         ].map(([key, label, icon]) => {
           const isActive = tab === key;
@@ -923,77 +941,6 @@ export default function Settings() {
                 ))}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
-
-      {/* ── SYSTEM CONFIGURATION TAB ── */}
-      {tab === "system" && (
-        <div className="bento-card p-6 sm:p-8 space-y-6">
-          <div className="flex items-center gap-3">
-            <Bell className="h-5 w-5 text-muted-foreground" />
-            <div>
-              <h2 className="text-base font-semibold text-foreground">Automated Inspection Reminders</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Configure default routine inspection and maintenance schedules across the fleet.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="p-5 rounded-2xl bg-muted/40 border border-border/80 space-y-4">
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Interval Settings</span>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Months</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="24"
-                    value={serviceInterval}
-                    onChange={(e) => setServiceInterval(e.target.value)}
-                    className="rounded-xl h-10 bg-background border-border text-center font-bold text-sm"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Days</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="31"
-                    value={serviceIntervalDays}
-                    onChange={(e) => setServiceIntervalDays(e.target.value)}
-                    className="rounded-xl h-10 bg-background border-border text-center font-bold text-sm"
-                  />
-                </div>
-              </div>
-              <Button
-                onClick={saveServiceInterval}
-                disabled={intervalSaving}
-                className="w-full rounded-xl transition-all font-semibold text-xs h-10 shadow-sm"
-              >
-                <Save className="w-4 h-4 mr-2" />
-                {intervalSaving ? "Saving..." : "Save Interval"}
-              </Button>
-            </div>
-
-            <div className="p-5 rounded-2xl bg-muted/40 border border-border/80 space-y-3">
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Rules & Logic</span>
-              <ul className="space-y-2 text-xs text-muted-foreground">
-                <li className="flex items-start gap-2">
-                  <span className="text-foreground mt-0.5">•</span>
-                  Reminders generate automatically based on vehicle intake date and inspection cycles.
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-foreground mt-0.5">•</span>
-                  Vehicles due within 14 days display status alerts on the Vehicles inventory list.
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-foreground mt-0.5">•</span>
-                  Completing an inspection resets the countdown timer for that vehicle.
-                </li>
-              </ul>
-            </div>
           </div>
         </div>
       )}

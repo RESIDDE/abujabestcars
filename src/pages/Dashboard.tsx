@@ -21,6 +21,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { exportToExcel, printTable } from "@/lib/exportHelpers";
 import { logAction } from "@/lib/logger";
 import { toast } from "sonner";
+import { ERPInventoryDashboardView } from "@/components/dashboard/MarketingDashboardView";
 
 const COLORS = ["hsl(var(--primary))", "hsl(142 76% 36%)", "hsl(0 84% 60%)", "hsl(262 83% 58%)", "hsl(38 92% 50%)", "hsl(199 89% 48%)"];
 
@@ -146,6 +147,7 @@ export default function Dashboard() {
   const [search, setSearch] = useState("");
   const [companySearch, setCompanySearch] = useState("");
   const [greeting, setGreeting] = useState("Welcome back");
+  const [showDealershipView, setShowDealershipView] = useState(false);
 
   const isAdmin = role === "admin" || role === 'admin';
 
@@ -339,6 +341,19 @@ export default function Dashboard() {
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-10 animate-fade-up">
 
+      {/* ── Abuja Best Cars ERP & Dealership Inventory Dashboard ── */}
+      <ERPInventoryDashboardView
+        vehicles={vehicles}
+        sales={sales}
+        customers={customers}
+        expenses={expenses}
+        inquiries={inquiries}
+        profile={profile}
+        user={user}
+        showDealershipView={showDealershipView}
+        onToggleDealershipView={() => setShowDealershipView(!showDealershipView)}
+      />
+
       {/* SVG gradient defs for recharts */}
       <svg width="0" height="0" aria-hidden="true">
         <defs>
@@ -349,20 +364,23 @@ export default function Dashboard() {
         </defs>
       </svg>
 
-      {/* ── Compact Welcome Header ───────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border/80">
-        <div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-            <Calendar className="w-3.5 h-3.5" />
-            <span>{currentDateInfo}</span>
-          </div>
-          <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground">
-            {greeting}, {profile?.display_name?.split(' ')[0] || 'User'}
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Dealership performance overview & key metrics
-          </p>
-        </div>
+      {/* ── Optional Expandable Dealership Operations View ── */}
+      {showDealershipView && (
+        <div className="space-y-8 pt-4 border-t border-border/80 animate-in fade-in slide-in-from-top-4 duration-300">
+          {/* ── Compact Welcome Header ───────────────────────────── */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border/80">
+            <div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                <Calendar className="w-3.5 h-3.5" />
+                <span>{currentDateInfo}</span>
+              </div>
+              <h2 className="text-xl md:text-2xl font-bold tracking-tight text-foreground">
+                Dealership Operations & Telemetry
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Physical inventory status, profit margins, aging and sourced suppliers
+              </p>
+            </div>
 
         {canAddVehicle && (
           <Button
@@ -580,7 +598,7 @@ export default function Dashboard() {
             {/* Quick Stats Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {[
-                { to: "/vehicles",        Icon: Car,       count: vehicles.length,       label: "Lamido Stock" },
+                { to: "/vehicles",        Icon: Car,       count: vehicles.length,       label: "Vehicles Stock" },
                 { to: "/resale-vehicles", Icon: Car,       count: resaleVehicles.length,  label: "Resale Stock" },
                 { to: "/customers",       Icon: Users,     count: customers.length,       label: "Customers" },
                 { to: "/sales",           Icon: DollarSign,count: sales.length,           label: "Sales" },
@@ -741,6 +759,8 @@ export default function Dashboard() {
             </div>
           </div>
 
+        </div>
+      )}
         </div>
       )}
     </div>

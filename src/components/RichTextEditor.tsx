@@ -26,6 +26,7 @@ import logo from "@/assets/logo.png";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
+import { logAction } from "@/lib/logger";
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Types
@@ -821,8 +822,8 @@ export function RichTextEditor({ initialData, onSave, onBack }: RichTextEditorPr
           <div style="position:absolute;top:0;right:0;font-size:12px;font-weight:600;color:#555;">RC 1907711</div>
           <img src="${logoBase64}" style="width:90px;height:90px;object-fit:contain;margin-right:20px;" />
           <div style="flex:1;display:flex;flex-direction:column;align-items:flex-start;">
-            <h1 style="font-family:'Arial Black',sans-serif;font-weight:900;font-size:36px;margin:0;color:#C0392B;text-transform:uppercase;letter-spacing:-1px;line-height:1.1;">
-              LAMIDO CARS LTD.
+            <h1 style="font-family:'Arial Black',sans-serif;font-weight:900;font-size:34px;margin:0;color:#C0392B;text-transform:uppercase;letter-spacing:-1px;line-height:1.1;">
+              ABUJA BEST CARS
             </h1>
             <div style="margin-top:4px;width:100%;text-align:left;font-size:11px;color:#333;">
               <span>&#x1F4CD; 38 Gana St, Maitama, Abuja 904101, FCT.</span>
@@ -830,8 +831,8 @@ export function RichTextEditor({ initialData, onSave, onBack }: RichTextEditorPr
             </div>
             <div style="margin-top:2px;width:100%;text-align:left;font-size:11px;color:#333;">
               <span>&#x1F4DE; 0703 933 7459</span>
-              <span style="margin-left:12px;">&#x1F4F7; lamido_cars_abuja</span>
-              <span style="margin-left:12px;">&#x2709; <span style="color:#2563eb;font-style:italic;text-decoration:underline;">Lamidocarsltd@gmail.com</span></span>
+              <span style="margin-left:12px;">&#x1F4F7; @abujabestcars</span>
+              <span style="margin-left:12px;">&#x2709; <span style="color:#2563eb;font-style:italic;text-decoration:underline;">abujabestcars@gmail.com</span></span>
             </div>
           </div>
         </div>`;
@@ -929,6 +930,7 @@ export function RichTextEditor({ initialData, onSave, onBack }: RichTextEditorPr
       if (win) {
         win.document.write(html);
         win.document.close();
+        logAction("PRINT", "Document", doc.id, { title: doc.title, ref: doc.title, pages: pages.length });
         setTimeout(() => { win.focus(); win.print(); }, 600);
       }
     });
@@ -937,6 +939,7 @@ export function RichTextEditor({ initialData, onSave, onBack }: RichTextEditorPr
   const handleExportPDF = async () => {
     setIsExporting(true);
     toast.info("Preparing PDF...");
+    logAction("EXPORT", "Document", doc.id, { title: doc.title, format: "PDF", ref: doc.title });
     try {
       const pdf = new jsPDF({ orientation: doc.orientation, unit: "mm", format: "a4" });
       const pw = pdf.internal.pageSize.getWidth();
@@ -962,6 +965,7 @@ export function RichTextEditor({ initialData, onSave, onBack }: RichTextEditorPr
   };
 
   const handleExportJSON = () => {
+    logAction("EXPORT", "Document", doc.id, { title: doc.title, format: "JSON", ref: doc.title });
     const exportDoc = { ...doc, content: JSON.stringify(pages) };
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportDoc, null, 2));
     const a = document.createElement("a");

@@ -240,7 +240,7 @@ export default function SignSale() {
 
                 <div className="pt-4 text-center">
                   <p className="text-[11px] text-muted-foreground opacity-60">
-                    This is a legally binding digital signature. Sales representative: <strong>{sale.rep_name || "Lamido Cars"}</strong>
+                    This is a legally binding digital signature. Sales representative: <strong>{sale.rep_name || "Abuja Best Cars"}</strong>
                   </p>
                 </div>
              </div>

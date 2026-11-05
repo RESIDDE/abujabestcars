@@ -32,7 +32,7 @@ import {
   PlusCircle, Search, Pencil, Trash2, Download, FileText, Printer, 
   Receipt, Wallet, BarChart as BarChartIcon, User, Calendar, 
   CreditCard, ArrowLeft, X, PieChart as PieChartIcon, TrendingUp,
-  Tag, Car, CheckCircle2
+  Tag, Car, CheckCircle2, Plus, Layers
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -126,6 +126,22 @@ export default function Expenses() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<any | null>(null);
 
+  interface ExpenseItemRow {
+    id: string;
+    title: string;
+    amount: string;
+    category: string;
+    vehicle_id?: string;
+  }
+
+  const createEmptyItem = (): ExpenseItemRow => ({
+    id: Math.random().toString(36).substring(2, 9),
+    title: "",
+    amount: "",
+    category: "Errands & Logistics",
+    vehicle_id: "",
+  });
+
   // Form State
   const emptyForm = {
     title: "",
@@ -137,7 +153,33 @@ export default function Expenses() {
     notes: "",
   };
   const [form, setForm] = useState(emptyForm);
+  const [items, setItems] = useState<ExpenseItemRow[]>([createEmptyItem()]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const addItem = () => {
+    setItems((prev) => [...prev, createEmptyItem()]);
+  };
+
+  const removeItem = (id: string) => {
+    if (items.length <= 1) return;
+    setItems((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const updateItem = (id: string, field: keyof ExpenseItemRow, value: any) => {
+    setItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
+    );
+  };
+
+  const totalItemsAmount = useMemo(() => {
+    if (editingExpense) {
+      return parseFloat(String(form.amount).replace(/,/g, "")) || 0;
+    }
+    return items.reduce((sum, item) => {
+      const val = parseFloat(String(item.amount).replace(/,/g, "")) || 0;
+      return sum + val;
+    }, 0);
+  }, [editingExpense, form.amount, items]);
 
   // Query Expenses
   const { data: expenses = [], isLoading } = useQuery({
@@ -173,34 +215,72 @@ export default function Expenses() {
   // Mutations
   const createOrUpdateMutation = useMutation({
     mutationFn: async () => {
-      const numAmount = parseFloat(String(form.amount).replace(/,/g, "")) || 0;
-      if (!form.title.trim()) throw new Error("Title/Description is required");
-      if (numAmount <= 0) throw new Error("Please enter a valid expense amount");
-
-      const payload: any = {
-        title: form.title.trim(),
-        amount: numAmount,
-        category: form.category,
-        errand_by: form.errand_by.trim() || null,
-        expense_date: form.expense_date,
-        payment_method: form.payment_method,
-        notes: form.notes.trim() || null,
-        created_by: user?.id || null,
-      };
-
       if (editingExpense) {
+        const numAmount = parseFloat(String(form.amount).replace(/,/g, "")) || 0;
+        if (!form.title.trim()) throw new Error("Title/Description is required");
+        if (numAmount <= 0) throw new Error("Please enter a valid expense amount");
+
+        const payload: any = {
+          title: form.title.trim(),
+          amount: numAmount,
+          category: form.category,
+          errand_by: form.errand_by.trim() || null,
+          expense_date: form.expense_date,
+          payment_method: form.payment_method,
+          notes: form.notes.trim() || null,
+          created_by: user?.id || null,
+        };
+
         const { error } = await supabase.from("expenses").update(payload).eq("id", editingExpense.id);
         if (error) throw error;
         await logAction("UPDATE", "Expense", editingExpense.id, { title: form.title, amount: numAmount });
       } else {
-        const { error } = await supabase.from("expenses").insert([payload]);
+        // Validate all expense items
+        if (items.length === 0) throw new Error("Please add at least one expense item");
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (!item.title.trim()) {
+            throw new Error(`Expense Item #${i + 1}: Title / Description is required`);
+          }
+          const num = parseFloat(String(item.amount).replace(/,/g, "")) || 0;
+          if (num <= 0) {
+            throw new Error(`Expense Item #${i + 1} ("${item.title.trim()}"): Please enter a valid amount`);
+          }
+        }
+
+        const batchId = items.length > 1 ? crypto.randomUUID() : null;
+        const payloads = items.map((item) => ({
+          title: item.title.trim(),
+          amount: parseFloat(String(item.amount).replace(/,/g, "")) || 0,
+          category: item.category,
+          errand_by: form.errand_by.trim() || null,
+          expense_date: form.expense_date,
+          payment_method: form.payment_method,
+          notes: form.notes.trim() || null,
+          vehicle_id: item.vehicle_id || null,
+          batch_id: batchId,
+          created_by: user?.id || null,
+        }));
+
+        const { error } = await supabase.from("expenses").insert(payloads);
         if (error) throw error;
-        await logAction("CREATE", "Expense", "new", { title: form.title, amount: numAmount });
+        await logAction("CREATE", "Expense", batchId || "new", { 
+          count: items.length, 
+          titles: items.map((i) => i.title),
+          total: payloads.reduce((s, p) => s + p.amount, 0)
+        });
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["expenses"] });
-      toast.success(editingExpense ? "Expense updated successfully" : "Expense recorded successfully");
+      if (editingExpense) {
+        toast.success("Expense updated successfully");
+      } else if (items.length > 1) {
+        const totalSum = items.reduce((s, i) => s + (parseFloat(String(i.amount).replace(/,/g, "")) || 0), 0);
+        toast.success(`Successfully recorded ${items.length} expenses totaling ₦${totalSum.toLocaleString()}!`);
+      } else {
+        toast.success("Expense recorded successfully");
+      }
       closeDialog();
     },
     onError: (err: any) => {
@@ -227,6 +307,7 @@ export default function Expenses() {
   const openNewDialog = () => {
     setEditingExpense(null);
     setForm(emptyForm);
+    setItems([createEmptyItem()]);
     setDialogOpen(true);
   };
 
@@ -241,6 +322,13 @@ export default function Expenses() {
       payment_method: exp.payment_method || "Cash",
       notes: exp.notes || "",
     });
+    setItems([{
+      id: exp.id,
+      title: exp.title || "",
+      amount: String(exp.amount || ""),
+      category: exp.category || "Errands & Logistics",
+      vehicle_id: exp.vehicle_id || "",
+    }]);
     setDialogOpen(true);
   };
 
@@ -248,6 +336,7 @@ export default function Expenses() {
     setDialogOpen(false);
     setEditingExpense(null);
     setForm(emptyForm);
+    setItems([createEmptyItem()]);
   };
 
   // Filtered expenses
@@ -357,7 +446,7 @@ export default function Expenses() {
       Notes: e.notes || "",
     }));
     logAction("EXPORT", "Expenses", "bulk", { format: "Excel", count: rows.length });
-    exportToExcel(rows, "Lamido_Company_Expenses");
+    exportToExcel(rows, "Abuja_Best_Cars_Company_Expenses");
   };
 
   const handleExportCSV = () => {
@@ -371,7 +460,7 @@ export default function Expenses() {
       Notes: e.notes || "",
     }));
     logAction("EXPORT", "Expenses", "bulk", { format: "CSV", count: rows.length });
-    exportToCSV(rows, "Lamido_Company_Expenses");
+    exportToCSV(rows, "Abuja_Best_Cars_Company_Expenses");
   };
 
   const handleExportPDF = () => {
@@ -384,7 +473,7 @@ export default function Expenses() {
       payment_method: e.payment_method || "Cash",
     }));
     logAction("EXPORT", "Expenses", "bulk", { format: "PDF", count: rows.length });
-    exportToPDF("Lamido Cars — Company Expenses Report", rows, [
+    exportToPDF("Abuja Best Cars — Company Expenses Report", rows, [
       { key: "title", label: "Description / Errand" },
       { key: "category", label: "Category" },
       { key: "errand_by", label: "Errand By" },
@@ -404,7 +493,7 @@ export default function Expenses() {
       amount: `₦${(Number(e.amount) || 0).toLocaleString()}`,
     }));
     logAction("PRINT", "Expenses", "bulk", { count: filtered.length });
-    printTable("Lamido Cars — Company Expenses", rows, [
+    printTable("Abuja Best Cars — Company Expenses", rows, [
       { key: "title", label: "Description / Errand" },
       { key: "category", label: "Category" },
       { key: "errand_by", label: "Errand By" },
@@ -800,125 +889,360 @@ export default function Expenses() {
 
       {/* Record / Edit Expense Dialog */}
       <Dialog open={dialogOpen} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent className="max-w-xl rounded-3xl glass-panel border-white/10 p-0 shadow-2xl">
-          <div className="sticky top-0 z-10 glass-panel border-b border-white/10 p-4 sm:p-6 flex justify-between items-center bg-background/80 backdrop-blur-xl">
-            <DialogTitle className="text-xl font-bold flex items-center gap-2">
-              <Receipt className="h-5 w-5 text-amber-500" /> 
-              {editingExpense ? "Edit Expense Entry" : "Record Company Expense"}
-            </DialogTitle>
+        <DialogContent className="max-w-2xl max-h-[92vh] flex flex-col rounded-3xl glass-panel border-white/10 p-0 shadow-2xl">
+          <div className="sticky top-0 z-10 glass-panel border-b border-white/10 p-4 sm:p-6 flex justify-between items-center bg-background/80 backdrop-blur-xl shrink-0">
+            <div>
+              <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                <Receipt className="h-5 w-5 text-amber-500" /> 
+                {editingExpense 
+                  ? "Edit Expense Entry" 
+                  : items.length > 1 
+                    ? `Record Multiple Expenses (${items.length} Items)` 
+                    : "Record Company Expense"}
+              </DialogTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {editingExpense 
+                  ? "Update this single expense record." 
+                  : "Add one or multiple expense items in this single record."}
+              </p>
+            </div>
             <Button variant="ghost" size="icon" onClick={closeDialog} className="rounded-full">
               <X className="h-5 w-5" />
             </Button>
           </div>
 
-          <div className="p-6 space-y-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Expense Title / Description *</Label>
-              <Input 
-                placeholder="e.g. Bought fuel for test drive, Registry plate renewal, Office internet"
-                value={form.title}
-                onChange={(e) => setForm(p => ({ ...p, title: e.target.value }))}
-                className="bg-background/50 border-white/10 rounded-xl"
-              />
-            </div>
+          <div className="p-6 space-y-5 overflow-y-auto max-h-[calc(92vh-160px)]">
+            {editingExpense ? (
+              /* Single Expense Edit Form */
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Expense Title / Description *</Label>
+                  <Input 
+                    placeholder="e.g. Bought fuel for test drive, Registry plate renewal, Office internet"
+                    value={form.title}
+                    onChange={(e) => setForm(p => ({ ...p, title: e.target.value }))}
+                    className="bg-background/50 border-white/10 rounded-xl"
+                  />
+                </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Amount (₦) *</Label>
-                <CurrencyInput 
-                  value={form.amount}
-                  onChange={(e) => setForm(p => ({ ...p, amount: e.target.value }))}
-                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Amount (₦) *</Label>
+                    <CurrencyInput 
+                      value={form.amount}
+                      onChange={(e) => setForm(p => ({ ...p, amount: e.target.value }))}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Category *</Label>
+                    <Select value={form.category} onValueChange={(val) => setForm(p => ({ ...p, category: val }))}>
+                      <SelectTrigger className="bg-background/50 border-white/10 rounded-xl h-11">
+                        <SelectValue placeholder="Select Category" />
+                      </SelectTrigger>
+                      <SelectContent className="glass-panel rounded-xl">
+                        {CATEGORIES.map(cat => (
+                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Who went for the Errand / Spent by</Label>
+                    <Input 
+                      placeholder="e.g. Musa, Ibrahim, Driver, Manager"
+                      value={form.errand_by}
+                      onChange={(e) => setForm(p => ({ ...p, errand_by: e.target.value }))}
+                      className="bg-background/50 border-white/10 rounded-xl"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Expense Date *</Label>
+                    <Input 
+                      type="date"
+                      value={form.expense_date}
+                      onChange={(e) => setForm(p => ({ ...p, expense_date: e.target.value }))}
+                      className="bg-background/50 border-white/10 rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Payment Method</Label>
+                  <Select value={form.payment_method} onValueChange={(val) => setForm(p => ({ ...p, payment_method: val }))}>
+                    <SelectTrigger className="bg-background/50 border-white/10 rounded-xl h-11">
+                      <SelectValue placeholder="Select Payment Method" />
+                    </SelectTrigger>
+                    <SelectContent className="glass-panel rounded-xl">
+                      <SelectItem value="Cash">Cash</SelectItem>
+                      <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                      <SelectItem value="Card / POS">Card / POS</SelectItem>
+                      <SelectItem value="Cheque">Cheque</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Additional Notes / Remarks</Label>
+                  <Textarea 
+                    placeholder="Any special remarks, item receipts, or errand outcome..."
+                    value={form.notes}
+                    onChange={(e) => setForm(p => ({ ...p, notes: e.target.value }))}
+                    rows={3}
+                    className="bg-background/50 border-white/10 rounded-xl"
+                  />
+                </div>
               </div>
+            ) : (
+              /* Multi-Item Expense Creation */
+              <div className="space-y-5">
+                {/* 1. Shared Errand & Voucher Information */}
+                <div className="p-4 rounded-2xl bg-card/30 border border-white/10 space-y-4">
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5 text-amber-500" />
+                    Voucher &amp; Errand Details
+                  </p>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Category *</Label>
-                <Select value={form.category} onValueChange={(val) => setForm(p => ({ ...p, category: val }))}>
-                  <SelectTrigger className="bg-background/50 border-white/10 rounded-xl h-11">
-                    <SelectValue placeholder="Select Category" />
-                  </SelectTrigger>
-                  <SelectContent className="glass-panel rounded-xl">
-                    {CATEGORIES.map(cat => (
-                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs font-semibold">Expense Date *</Label>
+                      <Input 
+                        type="date"
+                        value={form.expense_date}
+                        onChange={(e) => setForm(p => ({ ...p, expense_date: e.target.value }))}
+                        className="bg-background/50 border-white/10 rounded-xl h-10 text-xs"
+                      />
+                    </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Who went for the Errand / Spent by</Label>
-                <Input 
-                  placeholder="e.g. Musa, Ibrahim, Driver, Manager"
-                  value={form.errand_by}
-                  onChange={(e) => setForm(p => ({ ...p, errand_by: e.target.value }))}
-                  className="bg-background/50 border-white/10 rounded-xl"
-                />
-                {knownRunners.length > 0 && !form.errand_by && (
-                  <div className="flex flex-wrap gap-1 pt-1">
-                    <span className="text-[10px] text-muted-foreground mr-1">Recent:</span>
-                    {knownRunners.slice(0, 4).map(r => (
-                      <button
-                        key={r}
-                        type="button"
-                        onClick={() => setForm(p => ({ ...p, errand_by: r }))}
-                        className="text-[10px] bg-foreground/5 hover:bg-amber-500/20 hover:text-amber-500 px-2 py-0.5 rounded-md border border-white/5 transition-colors"
+                    <div className="space-y-1">
+                      <Label className="text-xs font-semibold">Spent By / Errand Runner</Label>
+                      <Input 
+                        placeholder="e.g. Musa, Driver"
+                        value={form.errand_by}
+                        onChange={(e) => setForm(p => ({ ...p, errand_by: e.target.value }))}
+                        className="bg-background/50 border-white/10 rounded-xl h-10 text-xs"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label className="text-xs font-semibold">Payment Method</Label>
+                      <Select value={form.payment_method} onValueChange={(val) => setForm(p => ({ ...p, payment_method: val }))}>
+                        <SelectTrigger className="bg-background/50 border-white/10 rounded-xl h-10 text-xs">
+                          <SelectValue placeholder="Payment Method" />
+                        </SelectTrigger>
+                        <SelectContent className="glass-panel rounded-xl">
+                          <SelectItem value="Cash">Cash</SelectItem>
+                          <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                          <SelectItem value="Card / POS">Card / POS</SelectItem>
+                          <SelectItem value="Cheque">Cheque</SelectItem>
+                          <SelectItem value="Other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {knownRunners.length > 0 && !form.errand_by && (
+                    <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                      <span className="text-[10px] text-muted-foreground mr-1">Recent:</span>
+                      {knownRunners.slice(0, 4).map(r => (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => setForm(p => ({ ...p, errand_by: r }))}
+                          className="text-[10px] bg-foreground/5 hover:bg-amber-500/20 hover:text-amber-500 px-2 py-0.5 rounded-md border border-white/5 transition-colors"
+                        >
+                          {r}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. Expense Items List */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Layers className="h-4 w-4 text-amber-500" />
+                      <Label className="text-xs font-bold uppercase tracking-wider text-foreground">
+                        Expense Items ({items.length})
+                      </Label>
+                    </div>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={addItem}
+                      className="h-8 text-xs rounded-xl border-dashed border-amber-500/40 hover:border-amber-500 hover:bg-amber-500/10 text-amber-400 gap-1.5"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add Another Expense
+                    </Button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {items.map((item, index) => (
+                      <div 
+                        key={item.id} 
+                        className="relative p-4 rounded-2xl bg-card/40 border border-white/10 space-y-3 transition-all hover:border-white/20"
                       >
-                        {r}
-                      </button>
+                        <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                              Item #{index + 1}
+                            </span>
+                            {item.title.trim() && (
+                              <span className="text-xs text-white/70 font-medium truncate max-w-[220px]">
+                                {item.title}
+                              </span>
+                            )}
+                          </div>
+                          {items.length > 1 && (
+                            <Button 
+                              type="button" 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => removeItem(item.id)}
+                              className="h-7 w-7 rounded-lg text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-[11px] font-semibold text-white/70">
+                            Description / Purpose *
+                          </Label>
+                          <Input 
+                            placeholder="e.g. Fuel for test drive, Brake pads purchase, Office refreshments"
+                            value={item.title}
+                            onChange={(e) => updateItem(item.id, "title", e.target.value)}
+                            className="bg-background/50 border-white/10 rounded-xl h-10 text-xs"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <Label className="text-[11px] font-semibold text-white/70">Category *</Label>
+                            <Select value={item.category} onValueChange={(val) => updateItem(item.id, "category", val)}>
+                              <SelectTrigger className="bg-background/50 border-white/10 rounded-xl h-10 text-xs">
+                                <SelectValue placeholder="Select Category" />
+                              </SelectTrigger>
+                              <SelectContent className="glass-panel rounded-xl">
+                                {CATEGORIES.map(cat => (
+                                  <SelectItem key={cat} value={cat} className="text-xs">{cat}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-1">
+                            <Label className="text-[11px] font-semibold text-white/70">Amount (₦) *</Label>
+                            <CurrencyInput 
+                              value={item.amount}
+                              onChange={(e) => updateItem(item.id, "amount", e.target.value)}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Optional Vehicle link */}
+                        <div className="space-y-1">
+                          <Label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
+                            <Car className="h-3 w-3 text-white/50" />
+                            Related Vehicle (Optional)
+                          </Label>
+                          <Select 
+                            value={item.vehicle_id || "none"} 
+                            onValueChange={(val) => updateItem(item.id, "vehicle_id", val === "none" ? "" : val)}
+                          >
+                            <SelectTrigger className="bg-background/50 border-white/10 rounded-xl h-9 text-xs">
+                              <SelectValue placeholder="None / General Company Expense" />
+                            </SelectTrigger>
+                            <SelectContent className="glass-panel rounded-xl max-h-52">
+                              <SelectItem value="none" className="text-xs text-muted-foreground">
+                                None (General Company Expense)
+                              </SelectItem>
+                              {vehicles.map((v: any) => (
+                                <SelectItem key={v.id} value={v.id} className="text-xs">
+                                  {v.year} {v.make} {v.model} {v.vin ? `(VIN: ${v.vin.slice(-6)})` : ""}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
                     ))}
                   </div>
-                )}
+
+                  {/* Add Another Item Button */}
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={addItem}
+                    className="w-full py-4 h-auto rounded-2xl border-dashed border-amber-500/30 hover:border-amber-500 hover:bg-amber-500/10 text-amber-400 font-semibold text-xs flex items-center justify-center gap-2 transition-all"
+                  >
+                    <Plus className="h-4 w-4" />
+                    + Add Another Expense Item
+                  </Button>
+                </div>
+
+                {/* 3. Live Total Calculation Banner */}
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/20 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-amber-400 uppercase tracking-wider">Total Voucher Amount</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {items.length} {items.length === 1 ? "expense item" : "expense items"} to be saved
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-black font-mono text-amber-400">
+                      ₦{totalItemsAmount.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+
+                {/* 4. Shared Remarks / Notes */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Additional Notes / Remarks</Label>
+                  <Textarea 
+                    placeholder="General remarks, errand outcomes, receipt references..."
+                    value={form.notes}
+                    onChange={(e) => setForm(p => ({ ...p, notes: e.target.value }))}
+                    rows={2}
+                    className="bg-background/50 border-white/10 rounded-xl"
+                  />
+                </div>
               </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Expense Date *</Label>
-                <Input 
-                  type="date"
-                  value={form.expense_date}
-                  onChange={(e) => setForm(p => ({ ...p, expense_date: e.target.value }))}
-                  className="bg-background/50 border-white/10 rounded-xl"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Payment Method</Label>
-              <Select value={form.payment_method} onValueChange={(val) => setForm(p => ({ ...p, payment_method: val }))}>
-                <SelectTrigger className="bg-background/50 border-white/10 rounded-xl h-11">
-                  <SelectValue placeholder="Select Payment Method" />
-                </SelectTrigger>
-                <SelectContent className="glass-panel rounded-xl">
-                  <SelectItem value="Cash">Cash</SelectItem>
-                  <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
-                  <SelectItem value="Card / POS">Card / POS</SelectItem>
-                  <SelectItem value="Cheque">Cheque</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Additional Notes / Remarks</Label>
-              <Textarea 
-                placeholder="Any special remarks, item receipts, or errand outcome..."
-                value={form.notes}
-                onChange={(e) => setForm(p => ({ ...p, notes: e.target.value }))}
-                rows={3}
-                className="bg-background/50 border-white/10 rounded-xl"
-              />
-            </div>
+            )}
           </div>
 
-          <DialogFooter className="p-6 border-t border-white/10 bg-black/40">
-            <Button variant="outline" onClick={closeDialog} className="rounded-xl">Cancel</Button>
+          <DialogFooter className="p-4 sm:p-6 border-t border-white/10 bg-black/40 shrink-0 flex flex-col sm:flex-row gap-2 justify-between items-center">
+            <Button variant="outline" onClick={closeDialog} className="rounded-xl w-full sm:w-auto">
+              Cancel
+            </Button>
             <Button 
               onClick={() => { setIsSubmitting(true); createOrUpdateMutation.mutate(); }}
-              disabled={isSubmitting || !form.title.trim() || !(parseFloat(String(form.amount).replace(/,/g, '')) > 0)}
-              className="rounded-xl bg-amber-500 hover:bg-amber-600 text-black font-semibold shadow-lg shadow-amber-500/20"
+              disabled={
+                isSubmitting || 
+                (editingExpense 
+                  ? (!form.title.trim() || !(parseFloat(String(form.amount).replace(/,/g, '')) > 0))
+                  : (items.length === 0 || totalItemsAmount <= 0 || items.some(i => !i.title.trim() || !(parseFloat(String(i.amount).replace(/,/g, '')) > 0)))
+                )
+              }
+              className="rounded-xl bg-amber-500 hover:bg-amber-600 text-black font-semibold shadow-lg shadow-amber-500/20 w-full sm:w-auto"
             >
-              {isSubmitting ? "Saving..." : editingExpense ? "Update Expense" : "Save Expense"}
+              {isSubmitting 
+                ? "Saving..." 
+                : editingExpense 
+                  ? "Update Expense" 
+                  : items.length > 1 
+                    ? `Save All ${items.length} Expenses (₦${totalItemsAmount.toLocaleString()})` 
+                    : "Save Expense"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { SignaturePad } from "@/components/SignaturePad";
-import { Printer, FileText, CheckCircle2, History, Search, Calendar as CalendarIcon, ArrowLeft, Trash2, PlusCircle, Users, Car, Pencil } from "lucide-react";
+import { Printer, FileText, CheckCircle2, History, Search, Calendar as CalendarIcon, ArrowLeft, Trash2, PlusCircle, Users, Car, Pencil, LayoutGrid, List, ChevronRight, CheckCircle } from "lucide-react";
+import { CustomPagination } from "@/components/CustomPagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -80,6 +81,9 @@ export default function AuthorityToSell() {
   const [search, setSearch] = useState("");
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
   const [selectedWeek, setSelectedWeek] = useState<string>("all");
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(8);
+  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const queryClient = useQueryClient();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -178,6 +182,9 @@ export default function AuthorityToSell() {
       return matchesSearch;
     });
   }, [history, search, selectedMonth, selectedWeek]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredHistory.length / pageSize));
+  const pagedHistory = filteredHistory.slice(page * pageSize, (page + 1) * pageSize);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handlePreview = async () => {
@@ -386,7 +393,7 @@ export default function AuthorityToSell() {
                   </span>
                   )
                 </>
-              )}, hereby authorize <strong>Lamido Cars Ltd.</strong> to sell the vehicle described above on my behalf. This authority includes:
+              )}, hereby authorize <strong>Abuja Best Cars</strong> to sell the vehicle described above on my behalf. This authority includes:
               negotiating with potential buyers, accepting payment, signing necessary sale documents, and releasing the vehicle and its title documents.
             </p>
             <div className="flex items-baseline gap-2 mt-2 print:mt-1 border-b border-gray-300 pb-0.5">
@@ -491,7 +498,7 @@ export default function AuthorityToSell() {
             </div>
             <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-white/90">Authority to Sell</h1>
             <p className="text-xs text-white/40 mt-0.5 max-w-lg">
-              Create, manage, and search Lamido Cars authorization agreements.
+              Create, manage, and search Abuja Best Car authorization agreements.
             </p>
           </div>
         </div>
@@ -680,24 +687,25 @@ export default function AuthorityToSell() {
         {/* ── HISTORY TAB ──────────────────────────────────────────── */}
         <TabsContent value="history">
           <div className="space-y-6">
-            {/* Filters */}
-            <div className="glass-panel p-6 rounded-3xl flex flex-col md:flex-row gap-4 items-center relative overflow-hidden">
+            {/* Filters & View Mode Toggle */}
+            <div className="glass-panel p-4 rounded-3xl flex flex-col md:flex-row gap-4 items-center justify-between relative overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-r from-sky-500/5 to-transparent pointer-events-none" />
-              <div className="relative w-full group">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-sky-500 transition-colors pointer-events-none" />
+              <div className="relative w-full md:max-w-md group z-10">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-sky-500 transition-colors pointer-events-none" />
                 <Input
-                  placeholder="Search by owner name, vehicle make, or chassis number..."
+                  placeholder="Search by owner, vehicle, chassis..."
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-12 h-14 rounded-2xl bg-background/50 border-white/10 focus-visible:ring-sky-500/50 font-medium text-base w-full shadow-inner"
+                  onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+                  className="pl-10 h-10 rounded-xl bg-background/50 border-white/10 focus-visible:ring-sky-500/50 font-medium text-sm w-full"
                 />
               </div>
-              <div className="flex gap-2 shrink-0">
-                <Select value={selectedMonth} onValueChange={(v) => { setSelectedMonth(v); }}>
-                  <SelectTrigger className="w-[180px] h-14 rounded-2xl bg-background/50 border-white/10 focus-visible:ring-sky-500 text-base shadow-inner">
+
+              <div className="flex gap-2 shrink-0 flex-wrap sm:flex-nowrap items-center z-10 w-full md:w-auto justify-between md:justify-end">
+                <Select value={selectedMonth} onValueChange={(v) => { setSelectedMonth(v); setPage(0); }}>
+                  <SelectTrigger className="w-[140px] h-10 rounded-xl bg-background/50 border-white/10 focus-visible:ring-sky-500 text-xs">
                     <SelectValue placeholder="Select Month" />
                   </SelectTrigger>
-                  <SelectContent className="glass-panel w-[180px] rounded-xl">
+                  <SelectContent className="glass-panel w-[140px] rounded-xl">
                     <SelectItem value="all" className="rounded-lg">All Time</SelectItem>
                     {Array.from({ length: 12 }).map((_, i) => {
                       const d = subMonths(new Date(), i);
@@ -710,11 +718,11 @@ export default function AuthorityToSell() {
                   </SelectContent>
                 </Select>
 
-                <Select value={selectedWeek} onValueChange={(v) => { setSelectedWeek(v); }}>
-                  <SelectTrigger className="w-[140px] h-14 rounded-2xl bg-background/50 border-white/10 focus-visible:ring-sky-500 text-base shadow-inner">
+                <Select value={selectedWeek} onValueChange={(v) => { setSelectedWeek(v); setPage(0); }}>
+                  <SelectTrigger className="w-[110px] h-10 rounded-xl bg-background/50 border-white/10 focus-visible:ring-sky-500 text-xs">
                     <SelectValue placeholder="All Weeks" />
                   </SelectTrigger>
-                  <SelectContent className="glass-panel w-[140px] rounded-xl">
+                  <SelectContent className="glass-panel w-[110px] rounded-xl">
                     <SelectItem value="all" className="rounded-lg">All Weeks</SelectItem>
                     <SelectItem value="1" className="rounded-lg">Week 1</SelectItem>
                     <SelectItem value="2" className="rounded-lg">Week 2</SelectItem>
@@ -723,42 +731,204 @@ export default function AuthorityToSell() {
                     <SelectItem value="5" className="rounded-lg">Week 5</SelectItem>
                   </SelectContent>
                 </Select>
+
+                {/* View Mode Toggle: Cards vs Table */}
+                <div className="flex items-center bg-muted/60 dark:bg-white/5 p-1 rounded-xl border border-white/10">
+                  <Button
+                    type="button"
+                    variant={viewMode === "cards" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("cards")}
+                    className={`h-8 px-3 rounded-lg text-xs font-semibold gap-1.5 transition-all ${
+                      viewMode === "cards" 
+                        ? "bg-[#181d2f] text-white dark:bg-white dark:text-slate-900 shadow-sm" 
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <LayoutGrid className="w-3.5 h-3.5" />
+                    <span>Cards</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={viewMode === "table" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("table")}
+                    className={`h-8 px-3 rounded-lg text-xs font-semibold gap-1.5 transition-all ${
+                      viewMode === "table" 
+                        ? "bg-[#181d2f] text-white dark:bg-white dark:text-slate-900 shadow-sm" 
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <List className="w-3.5 h-3.5" />
+                    <span>Table</span>
+                  </Button>
+                </div>
               </div>
             </div>
 
-            {/* Table */}
-            <div className="bento-card overflow-hidden">
-              <div className="hidden md:block table-container">
-                <Table>
-                  <TableHeader className="bg-foreground/5">
-                    <TableRow className="border-white/5 hover:bg-transparent">
-                      <TableHead className="font-bold uppercase tracking-widest text-[10px] py-6 px-6">Date</TableHead>
-                      <TableHead className="font-bold uppercase tracking-widest text-[10px]">Owner</TableHead>
-                      <TableHead className="font-bold uppercase tracking-widest text-[10px]">Vehicle</TableHead>
-                      <TableHead className="font-bold uppercase tracking-widest text-[10px]">Chassis No.</TableHead>
-                      <TableHead className="text-right font-bold uppercase tracking-widest text-[10px] px-6">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {isLoading ? (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center py-20 text-muted-foreground animate-pulse font-medium">
-                          Loading agreements...
-                        </TableCell>
+            {/* Main Content Area */}
+            {isLoading ? (
+              <div className="space-y-4">
+                {[1, 2, 3].map(i => <div key={i} className="h-28 w-full rounded-2xl bg-card/40 animate-pulse border border-white/5" />)}
+              </div>
+            ) : filteredHistory.length === 0 ? (
+              <div className="bento-card p-12 text-center text-muted-foreground flex flex-col items-center justify-center">
+                <FileText className="h-12 w-12 opacity-20 mb-4 text-emerald-500" />
+                <p className="font-semibold text-base mb-1">No agreements found.</p>
+                <p className="text-xs text-muted-foreground mb-4">No records match your filter criteria or no agreements have been saved yet.</p>
+                {(search || selectedMonth !== "all" || selectedWeek !== "all") && (
+                  <Button variant="link" onClick={() => { setSearch(""); setSelectedMonth("all"); setSelectedWeek("all"); setPage(0); }} className="text-emerald-500 text-xs font-semibold">
+                    Clear all filters
+                  </Button>
+                )}
+              </div>
+            ) : viewMode === "cards" ? (
+              /* Split-Panel ATS Cards Modeled After Reference Design */
+              <div className="space-y-4">
+                {pagedHistory.map((item) => {
+                  const docRef = `ATS-${item.id.slice(0, 8).toUpperCase()}`;
+                  const dateStr = new Date(item.agreement_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+                  return (
+                    <div 
+                      key={item.id}
+                      className="rounded-[22px] overflow-hidden border border-border/50 dark:border-white/10 bg-white dark:bg-[#151a26] shadow-md hover:shadow-xl transition-all flex flex-col md:flex-row group"
+                    >
+                      {/* Left Contrast Section: Solid dark container */}
+                      <div className="w-full md:w-[32%] lg:w-[28%] bg-[#111728] dark:bg-[#0c101a] text-white p-5 md:p-6 flex flex-col justify-between shrink-0 relative">
+                        <div>
+                          <div className="flex items-center justify-between mb-2.5">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                              AUTHORITY TO SELL
+                            </span>
+                            <span className="text-[10px] font-mono text-emerald-400 font-bold">
+                              {docRef}
+                            </span>
+                          </div>
+
+                          <h3 className="text-base md:text-lg font-bold text-white leading-snug tracking-tight group-hover:text-amber-400 transition-colors">
+                            {item.customer_name}
+                          </h3>
+
+                          <p className="text-[11px] text-slate-400 mt-2 flex items-center gap-1.5 truncate">
+                            <Car className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span className="truncate text-slate-200">{item.vehicle_make} {item.vehicle_year_model}</span>
+                          </p>
+                        </div>
+
+                        {/* Bottom link modeled after "View all chapters >" */}
+                        <div className="mt-5 pt-3 border-t border-white/10">
+                          <div 
+                            className="flex items-center justify-between text-xs text-slate-300 font-medium group/link cursor-pointer hover:text-white transition-colors"
+                            onClick={() => viewHistoryItem(item)}
+                            title={item.vehicle_chassis || item.customer_phone || item.customer_name}
+                          >
+                            <div className="flex items-center gap-1.5 truncate">
+                              <span className="font-mono text-[11px] truncate">
+                                {item.vehicle_chassis ? `Chassis: ${item.vehicle_chassis}` : "Document Record"}
+                              </span>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-slate-400 shrink-0 transition-transform group-hover/link:translate-x-0.5" />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right Content Section */}
+                      <div className="flex-1 p-5 md:p-6 flex flex-col justify-between gap-5 bg-card dark:bg-[#151a26]">
+                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                              AGREEMENT DATE • {dateStr}
+                            </p>
+                            <div className="flex items-center gap-3 flex-wrap">
+                              <h2 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
+                                {item.vehicle_make} — {item.vehicle_year_model}
+                              </h2>
+                              <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">
+                                <CheckCircle className="w-3 h-3 text-emerald-500" />
+                                Authorized for Sale
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {item.vehicle_color && <span>Color: {item.vehicle_color} • </span>}
+                              {item.vehicle_engine_number && <span className="font-mono">Engine: {item.vehicle_engine_number}</span>}
+                            </p>
+                          </div>
+
+                          {/* Progress / Status indicator matching reference */}
+                          <div className="flex flex-col sm:items-end gap-1.5">
+                            <div className="w-36 sm:w-44 h-2 bg-muted/60 dark:bg-white/10 rounded-full overflow-hidden">
+                              <div className="h-full rounded-full bg-emerald-500 w-full" />
+                            </div>
+                            <p className="text-[11px] font-semibold text-muted-foreground">
+                              {item.valid_until ? `Valid Until: ${new Date(item.valid_until).toLocaleDateString()}` : "Legal Binding ATS"}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Bottom Action Pill Buttons matching reference */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-border/40 dark:border-white/5">
+                          <div className="flex items-center gap-2">
+                            {hasEdit && (
+                              <div className="flex items-center gap-1">
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  onClick={() => handleEdit(item)} 
+                                  className="rounded-full h-9 w-9 hover:bg-muted text-muted-foreground hover:text-foreground"
+                                  title="Edit Agreement"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  onClick={() => deleteMutation.mutate(item.id)} 
+                                  className="rounded-full h-9 w-9 hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                                  title="Delete Agreement"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Primary Pill Button exactly like Continue in reference */}
+                          <Button
+                            size="sm"
+                            onClick={() => viewHistoryItem(item)}
+                            className="rounded-full px-6 h-9 bg-[#181d2f] hover:bg-[#252c42] dark:bg-white dark:hover:bg-slate-200 text-white dark:text-slate-900 font-bold text-xs tracking-wide shadow-lg shadow-black/20 hover:shadow-xl transition-all active:scale-95 gap-2"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                            View &amp; Print
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              /* Desktop Table View */
+              <div className="bento-card overflow-hidden">
+                <div className="table-container">
+                  <Table>
+                    <TableHeader className="bg-foreground/5 pointer-events-none">
+                      <TableRow className="border-border/50 hover:bg-transparent">
+                        <TableHead className="font-semibold px-6 py-4">Date</TableHead>
+                        <TableHead className="font-semibold">Owner</TableHead>
+                        <TableHead className="font-semibold">Vehicle</TableHead>
+                        <TableHead className="font-semibold">Chassis No.</TableHead>
+                        <TableHead className="text-right font-semibold px-6">Actions</TableHead>
                       </TableRow>
-                    ) : filteredHistory.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center py-20 text-muted-foreground font-medium">
-                          No agreements found. Create your first document above.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      filteredHistory.map((item) => (
-                        <TableRow key={item.id} className="border-white/5 hover:bg-white/5 transition-all group">
-                          <TableCell className="py-5 px-6 font-medium">
+                    </TableHeader>
+                    <TableBody>
+                      {pagedHistory.map((item) => (
+                        <TableRow key={item.id} className="border-border/10 hover:bg-white/5 transition-colors group">
+                          <TableCell className="px-6 py-4 font-medium text-sm">
                             {new Date(item.agreement_date).toLocaleDateString("en-GB")}
                           </TableCell>
-                          <TableCell className="font-bold text-foreground/90">{item.customer_name}</TableCell>
+                          <TableCell className="font-bold text-foreground">{item.customer_name}</TableCell>
                           <TableCell>
                             <span className="font-semibold text-sm">
                               {item.vehicle_make} — {item.vehicle_year_model}
@@ -768,98 +938,60 @@ export default function AuthorityToSell() {
                             {item.vehicle_chassis || "—"}
                           </TableCell>
                           <TableCell className="text-right px-6">
-                            <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all translate-x-4 group-hover:translate-x-0">
+                            <div className="flex justify-end gap-1 opacity-50 group-hover:opacity-100 transition-opacity">
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => viewHistoryItem(item)}
-                                className="h-10 rounded-xl font-bold px-4"
+                                className="h-8 rounded-lg font-bold px-3 text-xs"
                               >
-                                <Printer className="w-4 h-4 mr-2" /> View & Print
+                                <Printer className="w-3.5 h-3.5 mr-1.5" /> View
                               </Button>
                               {hasEdit && (
                                 <>
                                   <Button
                                     variant="ghost"
-                                    size="sm"
+                                    size="icon"
                                     onClick={() => handleEdit(item)}
-                                    className="h-10 rounded-xl hover:bg-sky-500/10 hover:text-sky-500 font-bold px-4"
+                                    className="h-8 w-8 rounded-lg hover:bg-foreground/20"
                                   >
-                                    <Pencil className="w-4 h-4 mr-2" /> Edit
+                                    <Pencil className="w-3.5 h-3.5" />
                                   </Button>
                                   <Button
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => deleteMutation.mutate(item.id)}
-                                    className="h-10 w-10 rounded-xl hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-all"
+                                    className="h-8 w-8 rounded-lg hover:bg-destructive/20 hover:text-destructive"
                                   >
-                                    <Trash2 className="w-4 h-4" />
+                                    <Trash2 className="w-3.5 h-3.5" />
                                   </Button>
                                 </>
                               )}
                             </div>
                           </TableCell>
                         </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
+            )}
 
-              {/* Mobile Card View */}
-              <div className="md:hidden divide-y divide-white/5">
-                {filteredHistory.map((item) => (
-                  <div key={item.id} className="p-4 space-y-4">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className="font-bold text-sm tracking-tight">{item.customer_name}</p>
-                        <p className="text-[10px] text-sky-500 font-bold mt-0.5 uppercase tracking-widest">{item.vehicle_make} — {item.vehicle_year_model}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[10px] text-muted-foreground font-medium uppercase">{new Date(item.agreement_date).toLocaleDateString("en-GB")}</p>
-                        <p className="text-[9px] text-muted-foreground/60 font-mono mt-0.5">{item.vehicle_chassis?.slice(-8) || "—"}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center justify-between pt-1">
-                      <div className="flex gap-1.5 items-center">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => viewHistoryItem(item)}
-                          className="h-8 rounded-lg text-[11px] font-bold border-white/10"
-                        >
-                          <Printer className="w-3.5 h-3.5 mr-1" /> View
-                        </Button>
-                      </div>
-                      
-                      <div className="flex gap-1">
-                        {hasEdit && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEdit(item)}
-                              className="h-8 rounded-lg hover:bg-sky-500/10 hover:text-sky-500"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => deleteMutation.mutate(item.id)}
-                              className="h-8 rounded-lg hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+            {/* Reference-Styled Pagination Component */}
+            {filteredHistory.length > 0 && (
+              <div className="pt-2">
+                <CustomPagination
+                  currentPage={page}
+                  totalPages={totalPages}
+                  totalItems={filteredHistory.length}
+                  pageSize={pageSize}
+                  onPageChange={setPage}
+                  onPageSizeChange={setPageSize}
+                  pageSizeOptions={[5, 8, 15, 25, 50]}
+                  itemLabel="agreements"
+                />
               </div>
-            </div>
+            )}
           </div>
         </TabsContent>
       </Tabs>

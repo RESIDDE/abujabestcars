@@ -12,7 +12,9 @@ import { SignaturePad } from "@/components/SignaturePad";
 import {
   Printer, FileText, CheckCircle2, History, Search,
   ArrowLeft, Trash2, PlusCircle, Users, Car, Pencil,
+  LayoutGrid, List, ChevronRight, CheckCircle,
 } from "lucide-react";
+import { CustomPagination } from "@/components/CustomPagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -145,6 +147,9 @@ export default function SalesAgreement() {
   const [search, setSearch] = useState("");
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
   const [selectedWeek, setSelectedWeek] = useState<string>("all");
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(8);
+  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const queryClient = useQueryClient();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -241,6 +246,9 @@ export default function SalesAgreement() {
       );
     });
   }, [history, search, selectedMonth, selectedWeek]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredHistory.length / pageSize));
+  const pagedHistory = filteredHistory.slice(page * pageSize, (page + 1) * pageSize);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
   const handlePreview = async () => {
@@ -501,7 +509,7 @@ export default function SalesAgreement() {
             <section className="mb-2 print:mb-1">
               <h2 className="font-black text-[10px] uppercase tracking-wide mb-0.5 bg-gray-100 px-2 py-0.5 rounded">Terms of Agreement</h2>
               <p className="text-[11px] print:text-[10px] leading-relaxed print:leading-snug text-gray-800 text-justify">
-                I, <span className="inline-block min-w-[140px] border-b border-gray-800 text-center font-bold px-1">{previewData.sellerName || ""}</span> (Seller), confirm the sale and transfer of full vehicle ownership to <span className="inline-block min-w-[140px] border-b border-gray-800 text-center font-bold px-1">{previewData.buyerName || ""}</span> (Buyer) for <strong>{formattedPrice || "___________"}</strong>{priceWords ? ` (${priceWords})` : ""}, facilitated by <strong>Lamido Cars Ltd.</strong>
+                I, <span className="inline-block min-w-[140px] border-b border-gray-800 text-center font-bold px-1">{previewData.sellerName || ""}</span> (Seller), confirm the sale and transfer of full vehicle ownership to <span className="inline-block min-w-[140px] border-b border-gray-800 text-center font-bold px-1">{previewData.buyerName || ""}</span> (Buyer) for <strong>{formattedPrice || "___________"}</strong>{priceWords ? ` (${priceWords})` : ""}, facilitated by <strong>Abuja Best Cars</strong>.
               </p>
               <p className="text-[11px] print:text-[10px] leading-relaxed print:leading-snug text-gray-800 text-justify mt-1">
                 The Seller warrants the vehicle is free from all encumbrances and title shall be transferred upon receipt of full payment. Both parties confirm reading and understanding these terms.
@@ -582,7 +590,7 @@ export default function SalesAgreement() {
               {/* Company Representative */}
               <div className="mt-2 border-t border-gray-300 pt-1.5 flex items-center justify-between">
                 <div className="flex-1 max-w-xs">
-                  <p className="text-[9px] font-bold text-gray-700 mb-0.5">Lamido Cars Rep Signature:</p>
+                  <p className="text-[9px] font-bold text-gray-700 mb-0.5">Abuja Best Cars Rep Signature:</p>
                   <div className="h-7 border-b border-gray-800 mb-0.5 flex items-end">
                     {previewData.repSignature && (
                       <img src={previewData.repSignature} alt="Rep Signature" className="max-h-6 object-contain" />
@@ -627,7 +635,7 @@ export default function SalesAgreement() {
             </div>
             <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-white/90">Sales Agreement &amp; Change of Ownership</h1>
             <p className="text-xs text-white/40 mt-0.5 max-w-lg">
-              Create, manage, and print vehicle sales agreement documents for Lamido Cars.
+              Create, manage, and print vehicle sales agreement documents for Abuja Best Car.
             </p>
           </div>
         </div>
@@ -930,23 +938,25 @@ export default function SalesAgreement() {
         {/* ── HISTORY TAB ──────────────────────────────────────────── */}
         <TabsContent value="history">
           <div className="space-y-6">
-            <div className="glass-panel p-6 rounded-3xl flex flex-col md:flex-row gap-4 items-center relative overflow-hidden">
+            {/* Filters & View Mode Toggle */}
+            <div className="glass-panel p-4 rounded-3xl flex flex-col md:flex-row gap-4 items-center justify-between relative overflow-hidden">
               <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/5 to-transparent pointer-events-none" />
-              <div className="relative w-full group">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-emerald-500 transition-colors pointer-events-none" />
+              <div className="relative w-full md:max-w-md group z-10">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-emerald-500 transition-colors pointer-events-none" />
                 <Input
-                  placeholder="Search by seller, buyer, vehicle make, or chassis..."
+                  placeholder="Search by seller, buyer, vehicle, chassis..."
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-12 h-14 rounded-2xl bg-background/50 border-white/10 focus-visible:ring-emerald-500/50 font-medium text-base w-full shadow-inner"
+                  onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+                  className="pl-10 h-10 rounded-xl bg-background/50 border-white/10 focus-visible:ring-emerald-500/50 font-medium text-sm w-full"
                 />
               </div>
-              <div className="flex gap-2 shrink-0">
-                <Select value={selectedMonth} onValueChange={(v) => { setSelectedMonth(v); }}>
-                  <SelectTrigger className="w-[180px] h-14 rounded-2xl bg-background/50 border-white/10 text-base shadow-inner">
+
+              <div className="flex gap-2 shrink-0 flex-wrap sm:flex-nowrap items-center z-10 w-full md:w-auto justify-between md:justify-end">
+                <Select value={selectedMonth} onValueChange={(v) => { setSelectedMonth(v); setPage(0); }}>
+                  <SelectTrigger className="w-[140px] h-10 rounded-xl bg-background/50 border-white/10 text-xs">
                     <SelectValue placeholder="Select Month" />
                   </SelectTrigger>
-                  <SelectContent className="glass-panel w-[180px] rounded-xl">
+                  <SelectContent className="glass-panel w-[140px] rounded-xl">
                     <SelectItem value="all" className="rounded-lg">All Time</SelectItem>
                     {Array.from({ length: 12 }).map((_, i) => {
                       const d = subMonths(new Date(), i);
@@ -958,11 +968,12 @@ export default function SalesAgreement() {
                     })}
                   </SelectContent>
                 </Select>
-                <Select value={selectedWeek} onValueChange={(v) => { setSelectedWeek(v); }}>
-                  <SelectTrigger className="w-[140px] h-14 rounded-2xl bg-background/50 border-white/10 text-base shadow-inner">
+
+                <Select value={selectedWeek} onValueChange={(v) => { setSelectedWeek(v); setPage(0); }}>
+                  <SelectTrigger className="w-[110px] h-10 rounded-xl bg-background/50 border-white/10 text-xs">
                     <SelectValue placeholder="All Weeks" />
                   </SelectTrigger>
-                  <SelectContent className="glass-panel w-[140px] rounded-xl">
+                  <SelectContent className="glass-panel w-[110px] rounded-xl">
                     <SelectItem value="all" className="rounded-lg">All Weeks</SelectItem>
                     <SelectItem value="1" className="rounded-lg">Week 1</SelectItem>
                     <SelectItem value="2" className="rounded-lg">Week 2</SelectItem>
@@ -971,114 +982,260 @@ export default function SalesAgreement() {
                     <SelectItem value="5" className="rounded-lg">Week 5</SelectItem>
                   </SelectContent>
                 </Select>
+
+                {/* View Mode Toggle: Cards vs Table */}
+                <div className="flex items-center bg-muted/60 dark:bg-white/5 p-1 rounded-xl border border-white/10">
+                  <Button
+                    type="button"
+                    variant={viewMode === "cards" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("cards")}
+                    className={`h-8 px-3 rounded-lg text-xs font-semibold gap-1.5 transition-all ${
+                      viewMode === "cards" 
+                        ? "bg-[#181d2f] text-white dark:bg-white dark:text-slate-900 shadow-sm" 
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <LayoutGrid className="w-3.5 h-3.5" />
+                    <span>Cards</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={viewMode === "table" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("table")}
+                    className={`h-8 px-3 rounded-lg text-xs font-semibold gap-1.5 transition-all ${
+                      viewMode === "table" 
+                        ? "bg-[#181d2f] text-white dark:bg-white dark:text-slate-900 shadow-sm" 
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <List className="w-3.5 h-3.5" />
+                    <span>Table</span>
+                  </Button>
+                </div>
               </div>
             </div>
 
-            <div className="bento-card overflow-hidden">
-              <div className="hidden md:block table-container">
-                <Table>
-                  <TableHeader className="bg-foreground/5">
-                    <TableRow className="border-white/5 hover:bg-transparent">
-                      <TableHead className="font-bold uppercase tracking-widest text-[10px] py-6 px-6">Date</TableHead>
-                      <TableHead className="font-bold uppercase tracking-widest text-[10px]">Seller</TableHead>
-                      <TableHead className="font-bold uppercase tracking-widest text-[10px]">Buyer</TableHead>
-                      <TableHead className="font-bold uppercase tracking-widest text-[10px]">Vehicle</TableHead>
-                      <TableHead className="font-bold uppercase tracking-widest text-[10px]">Price</TableHead>
-                      <TableHead className="text-right font-bold uppercase tracking-widest text-[10px] px-6">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {isLoading ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center py-20 text-muted-foreground animate-pulse font-medium">
-                          Loading agreements...
-                        </TableCell>
+            {/* Main Content Area */}
+            {isLoading ? (
+              <div className="space-y-4">
+                {[1, 2, 3].map(i => <div key={i} className="h-28 w-full rounded-2xl bg-card/40 animate-pulse border border-white/5" />)}
+              </div>
+            ) : filteredHistory.length === 0 ? (
+              <div className="bento-card p-12 text-center text-muted-foreground flex flex-col items-center justify-center">
+                <FileText className="h-12 w-12 opacity-20 mb-4 text-emerald-500" />
+                <p className="font-semibold text-base mb-1">No sales agreements found.</p>
+                <p className="text-xs text-muted-foreground mb-4">No records match your filter criteria or no agreements have been saved yet.</p>
+                {(search || selectedMonth !== "all" || selectedWeek !== "all") && (
+                  <Button variant="link" onClick={() => { setSearch(""); setSelectedMonth("all"); setSelectedWeek("all"); setPage(0); }} className="text-emerald-500 text-xs font-semibold">
+                    Clear all filters
+                  </Button>
+                )}
+              </div>
+            ) : viewMode === "cards" ? (
+              /* Split-Panel Sales Agreement Cards Modeled After Reference Design */
+              <div className="space-y-4">
+                {pagedHistory.map((item) => {
+                  const docRef = `SA-${item.id.slice(0, 8).toUpperCase()}`;
+                  const dateStr = new Date(item.agreement_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+                  const priceNumeric = Number(item.sale_price?.replace(/[^0-9.]/g, "") || 0);
+
+                  return (
+                    <div 
+                      key={item.id}
+                      className="rounded-[22px] overflow-hidden border border-border/50 dark:border-white/10 bg-white dark:bg-[#151a26] shadow-md hover:shadow-xl transition-all flex flex-col md:flex-row group"
+                    >
+                      {/* Left Contrast Section: Solid dark container */}
+                      <div className="w-full md:w-[32%] lg:w-[28%] bg-[#111728] dark:bg-[#0c101a] text-white p-5 md:p-6 flex flex-col justify-between shrink-0 relative">
+                        <div>
+                          <div className="flex items-center justify-between mb-2.5">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                              SALES AGREEMENT
+                            </span>
+                            <span className="text-[10px] font-mono text-emerald-400 font-bold">
+                              {docRef}
+                            </span>
+                          </div>
+
+                          <h3 className="text-base md:text-lg font-bold text-white leading-snug tracking-tight group-hover:text-amber-400 transition-colors">
+                            {item.seller_name}
+                          </h3>
+
+                          <p className="text-[11px] text-slate-300 mt-1 flex items-center gap-1">
+                            <span className="text-slate-400">Buyer:</span>
+                            <span className="font-semibold text-white">{item.buyer_name}</span>
+                          </p>
+
+                          <p className="text-[11px] text-slate-400 mt-2 flex items-center gap-1.5 truncate">
+                            <Car className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span className="truncate text-slate-200">{item.vehicle_make} {item.vehicle_year_model}</span>
+                          </p>
+                        </div>
+
+                        {/* Bottom link modeled after "View all chapters >" */}
+                        <div className="mt-5 pt-3 border-t border-white/10">
+                          <div 
+                            className="flex items-center justify-between text-xs text-slate-300 font-medium group/link cursor-pointer hover:text-white transition-colors"
+                            onClick={() => viewHistoryItem(item)}
+                            title={item.vehicle_chassis ? `Chassis: ${item.vehicle_chassis}` : "Agreement Record"}
+                          >
+                            <div className="flex items-center gap-1.5 truncate">
+                              <span className="font-mono text-[11px] truncate">
+                                {item.vehicle_chassis ? `Chassis: ${item.vehicle_chassis}` : "Document Record"}
+                              </span>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-slate-400 shrink-0 transition-transform group-hover/link:translate-x-0.5" />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right Content Section */}
+                      <div className="flex-1 p-5 md:p-6 flex flex-col justify-between gap-5 bg-card dark:bg-[#151a26]">
+                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                              AGREEMENT DATE • {dateStr}
+                            </p>
+                            <div className="flex items-center gap-3 flex-wrap">
+                              <h2 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight font-mono">
+                                {priceNumeric > 0 ? `₦${priceNumeric.toLocaleString()}` : "Price Unspecified"}
+                              </h2>
+                              <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">
+                                <CheckCircle className="w-3 h-3 text-emerald-500" />
+                                Legally Executed
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {item.vehicle_color && <span>Color: {item.vehicle_color} • </span>}
+                              {item.vehicle_engine_number && <span className="font-mono">Engine: {item.vehicle_engine_number}</span>}
+                            </p>
+                          </div>
+
+                          {/* Progress / Status indicator matching reference */}
+                          <div className="flex flex-col sm:items-end gap-1.5">
+                            <div className="w-36 sm:w-44 h-2 bg-muted/60 dark:bg-white/10 rounded-full overflow-hidden">
+                              <div className="h-full rounded-full bg-emerald-500 w-full" />
+                            </div>
+                            <p className="text-[11px] font-semibold text-muted-foreground">
+                              100% Agreement Ratified
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Bottom Action Pill Buttons matching reference */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-border/40 dark:border-white/5">
+                          <div className="flex items-center gap-2">
+                            {hasEdit && (
+                              <div className="flex items-center gap-1">
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  onClick={() => handleEdit(item)} 
+                                  className="rounded-full h-9 w-9 hover:bg-muted text-muted-foreground hover:text-foreground"
+                                  title="Edit Agreement"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  onClick={() => deleteMutation.mutate(item.id)} 
+                                  className="rounded-full h-9 w-9 hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                                  title="Delete Agreement"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Primary Pill Button exactly like Continue in reference */}
+                          <Button
+                            size="sm"
+                            onClick={() => viewHistoryItem(item)}
+                            className="rounded-full px-6 h-9 bg-[#181d2f] hover:bg-[#252c42] dark:bg-white dark:hover:bg-slate-200 text-white dark:text-slate-900 font-bold text-xs tracking-wide shadow-lg shadow-black/20 hover:shadow-xl transition-all active:scale-95 gap-2"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                            View &amp; Print
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              /* Desktop Table View */
+              <div className="bento-card overflow-hidden">
+                <div className="table-container">
+                  <Table>
+                    <TableHeader className="bg-foreground/5 pointer-events-none">
+                      <TableRow className="border-border/50 hover:bg-transparent">
+                        <TableHead className="font-semibold px-6 py-4">Date</TableHead>
+                        <TableHead className="font-semibold">Seller</TableHead>
+                        <TableHead className="font-semibold">Buyer</TableHead>
+                        <TableHead className="font-semibold">Vehicle</TableHead>
+                        <TableHead className="font-semibold">Price</TableHead>
+                        <TableHead className="text-right font-semibold px-6">Actions</TableHead>
                       </TableRow>
-                    ) : filteredHistory.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center py-20 text-muted-foreground font-medium">
-                          No agreements found. Create your first document above.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      filteredHistory.map((item) => (
-                        <TableRow key={item.id} className="border-white/5 hover:bg-white/5 transition-all group">
-                          <TableCell className="py-5 px-6 font-medium">
+                    </TableHeader>
+                    <TableBody>
+                      {pagedHistory.map((item) => (
+                        <TableRow key={item.id} className="border-border/10 hover:bg-white/5 transition-colors group">
+                          <TableCell className="px-6 py-4 font-medium text-sm">
                             {new Date(item.agreement_date).toLocaleDateString("en-GB")}
                           </TableCell>
-                          <TableCell className="font-bold text-foreground/90">{item.seller_name}</TableCell>
-                          <TableCell className="font-semibold text-foreground/75">{item.buyer_name}</TableCell>
+                          <TableCell className="font-bold text-foreground">{item.seller_name}</TableCell>
+                          <TableCell className="font-semibold text-foreground/80">{item.buyer_name}</TableCell>
                           <TableCell>
                             <span className="font-semibold text-sm">{item.vehicle_make} — {item.vehicle_year_model}</span>
                           </TableCell>
-                          <TableCell className="font-mono text-sm text-emerald-400">
+                          <TableCell className="font-mono text-sm font-bold text-emerald-500">
                             {item.sale_price
-                              ? `\u20a6${Number(item.sale_price.replace(/[^0-9.]/g, "")).toLocaleString("en-NG")}`
+                              ? `₦${Number(item.sale_price.replace(/[^0-9.]/g, "")).toLocaleString("en-NG")}`
                               : "—"}
                           </TableCell>
                           <TableCell className="text-right px-6">
-                            <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all translate-x-4 group-hover:translate-x-0">
-                              <Button variant="ghost" size="sm" onClick={() => viewHistoryItem(item)} className="h-10 rounded-xl font-bold px-4">
-                                <Printer className="w-4 h-4 mr-2" /> View &amp; Print
+                            <div className="flex justify-end gap-1 opacity-50 group-hover:opacity-100 transition-opacity">
+                              <Button variant="ghost" size="sm" onClick={() => viewHistoryItem(item)} className="h-8 rounded-lg font-bold px-3 text-xs">
+                                <Printer className="w-3.5 h-3.5 mr-1.5" /> View
                               </Button>
                               {hasEdit && (
                                 <>
-                                  <Button variant="ghost" size="sm" onClick={() => handleEdit(item)} className="h-10 rounded-xl hover:bg-emerald-500/10 hover:text-emerald-500 font-bold px-4">
-                                    <Pencil className="w-4 h-4 mr-2" /> Edit
+                                  <Button variant="ghost" size="icon" onClick={() => handleEdit(item)} className="h-8 w-8 rounded-lg hover:bg-foreground/20">
+                                    <Pencil className="w-3.5 h-3.5" />
                                   </Button>
-                                  <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(item.id)} className="h-10 w-10 rounded-xl hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-all">
-                                    <Trash2 className="w-4 h-4" />
+                                  <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(item.id)} className="h-8 w-8 rounded-lg hover:bg-destructive/20 hover:text-destructive">
+                                    <Trash2 className="w-3.5 h-3.5" />
                                   </Button>
                                 </>
                               )}
                             </div>
                           </TableCell>
                         </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
+            )}
 
-              {/* Mobile list */}
-              <div className="md:hidden divide-y divide-white/5">
-                {isLoading ? (
-                  <p className="text-center py-12 text-muted-foreground animate-pulse">Loading...</p>
-                ) : filteredHistory.length === 0 ? (
-                  <p className="text-center py-12 text-muted-foreground font-medium">No agreements found.</p>
-                ) : (
-                  filteredHistory.map((item) => (
-                    <div key={item.id} className="p-5 space-y-2">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="font-bold text-sm">{item.seller_name} → {item.buyer_name}</p>
-                          <p className="text-xs text-muted-foreground">{item.vehicle_make} {item.vehicle_year_model}</p>
-                          <p className="text-xs text-emerald-400 font-mono">
-                            {item.sale_price ? `\u20a6${Number(item.sale_price.replace(/[^0-9.]/g, "")).toLocaleString("en-NG")}` : ""}
-                          </p>
-                        </div>
-                        <span className="text-xs text-muted-foreground">{new Date(item.agreement_date).toLocaleDateString("en-GB")}</span>
-                      </div>
-                      <div className="flex gap-2 pt-1">
-                        <Button size="sm" variant="ghost" className="h-8 rounded-lg px-3 text-xs" onClick={() => viewHistoryItem(item)}>
-                          <Printer className="w-3 h-3 mr-1" /> View
-                        </Button>
-                        {hasEdit && (
-                          <>
-                            <Button size="sm" variant="ghost" className="h-8 rounded-lg px-3 text-xs hover:text-emerald-500" onClick={() => handleEdit(item)}>
-                              <Pencil className="w-3 h-3 mr-1" /> Edit
-                            </Button>
-                            <Button size="sm" variant="ghost" className="h-8 w-8 rounded-lg hover:text-destructive" onClick={() => deleteMutation.mutate(item.id)}>
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
+            {/* Reference-Styled Pagination Component */}
+            {filteredHistory.length > 0 && (
+              <div className="pt-2">
+                <CustomPagination
+                  currentPage={page}
+                  totalPages={totalPages}
+                  totalItems={filteredHistory.length}
+                  pageSize={pageSize}
+                  onPageChange={setPage}
+                  onPageSizeChange={setPageSize}
+                  pageSizeOptions={[5, 8, 15, 25, 50]}
+                  itemLabel="agreements"
+                />
               </div>
-            </div>
+            )}
           </div>
         </TabsContent>
       </Tabs>

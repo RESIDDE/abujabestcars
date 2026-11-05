@@ -651,7 +651,7 @@ export default function AdvancedReport() {
 
   const handlePrint = () => {
     printHTMLDocument(
-      `Lamido Cars — Executive Business Report (${selectedMonth === "all" ? "All Time" : selectedMonth})`,
+      `Abuja Best Cars — Executive Business Report (${selectedMonth === "all" ? "All Time" : selectedMonth})`,
       getReportHTML()
     );
     logAction("PRINT", "AdvancedReport", "full_report");
@@ -659,8 +659,8 @@ export default function AdvancedReport() {
 
   const handleExportPDF = () => {
     exportHTMLToPDF(
-      `Lamido Cars — Executive Business Report (${selectedMonth === "all" ? "All Time" : selectedMonth})`,
-      `lamido_cars_advanced_report_${selectedMonth}`,
+      `Abuja Best Cars — Executive Business Report (${selectedMonth === "all" ? "All Time" : selectedMonth})`,
+      `abuja_best_cars_advanced_report_${selectedMonth}`,
       getReportHTML()
     );
     logAction("EXPORT_PDF", "AdvancedReport", "full_report");
@@ -748,7 +748,7 @@ export default function AdvancedReport() {
       <div className="flex flex-wrap items-end gap-x-5 gap-y-3.5">
         <div className="flex-1 min-w-[240px]">
           <p className="text-[11px] font-bold uppercase tracking-[0.09em] text-muted-foreground mb-1">
-            Lamido Cars Ltd · RC 1907711
+            Abuja Best Cars · RC 1907711
           </p>
           <h1 className="font-heading text-[22px] sm:text-[26px] lg:text-[29px] font-bold tracking-tight">
             Advanced Report
@@ -1020,7 +1020,7 @@ export default function AdvancedReport() {
       </section>
 
       <p className="text-[11.5px] text-muted-foreground text-center pt-1">
-        Lamido Cars Advanced Report · {periodLabel} · generated {generatedAt}
+        Abuja Best Cars Advanced Report · {periodLabel} · generated {generatedAt}
       </p>
     </div>
     )

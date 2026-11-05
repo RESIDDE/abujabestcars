@@ -27,8 +27,9 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { 
   PlusCircle, Search, Eye, Pencil, Trash2, Download, FileText, Printer, 
   Car, ListFilter, BarChart as BarChartIcon, Clock, Package, ShieldCheck, AlertTriangle, PieChart as PieChartIcon, ChevronRight, ArrowLeft,
-  CheckCircle, DollarSign, TrendingUp
+  CheckCircle, DollarSign, TrendingUp, LayoutGrid, List
 } from "lucide-react";
+import { CustomPagination } from "@/components/CustomPagination";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, CartesianGrid
@@ -41,7 +42,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { canEdit, canCreate } from "@/lib/permissions";
 import { logAction } from "@/lib/logger";
 
-const COLORS = ["hsl(var(--primary))", "hsl(142 76% 36%)", "hsl(38 92% 50%)", "hsl(262 83% 58%)", "hsl(0 84% 60%)", "hsl(199 89% 48%)"];
+const COLORS = ["hsl(var(--primary))", "hsl(142 76% 36%)", "hsl(38 92% 50%)", "hsl(217 91% 60%)", "hsl(0 84% 60%)", "hsl(199 89% 48%)"];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
@@ -64,8 +65,6 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   }
   return null;
 };
-
-const PAGE_SIZE = 20;
 
 export default function VehiclesList() {
   const navigate = useNavigate();
@@ -97,6 +96,8 @@ export default function VehiclesList() {
   const [selectedWeek, setSelectedWeek] = useState<string>("all");
   const [sourceCompanyFilter, setSourceCompanyFilter] = useState("all");
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(8);
+  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showDeleteSoldDialog, setShowDeleteSoldDialog] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(true);
@@ -192,8 +193,8 @@ export default function VehiclesList() {
     });
   }, [vehicles, activeTab, search, conditionFilter, statusFilter, sourceCompanyFilter, selectedMonth, selectedWeek]);
 
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paged = filtered.slice(page * pageSize, (page + 1) * pageSize);
 
   const handleExportExcel = () => {
     const rows = filtered.map((v) => ({
@@ -264,7 +265,7 @@ export default function VehiclesList() {
               <span className="text-xs font-semibold uppercase tracking-wider text-sky-400/60">Fleet Management</span>
             </div>
             <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-white/90">
-              Lamido Vehicles <span className="text-[10px] opacity-30 font-mono">v2.1</span>
+              Vehicles Inventory <span className="text-[10px] opacity-30 font-mono">v2.1</span>
             </h1>
             <p className="text-xs text-white/40 mt-0.5">
               View, add, and manage your active fleet and track historical sold inventory.
@@ -384,7 +385,7 @@ export default function VehiclesList() {
               <Card className="bento-card border-none shadow-xl">
                 <CardContent className="p-6">
                   <div className="flex justify-between items-start mb-4">
-                    <div className="p-3 bg-violet-500/10 rounded-2xl"><Package className="h-6 w-6 text-violet-500" /></div>
+                    <div className="p-3 bg-sky-500/10 rounded-2xl"><Package className="h-6 w-6 text-sky-500" /></div>
                   </div>
                   <h3 className="text-3xl font-bold">₦{soldCost.toLocaleString()}</h3>
                   <p className="text-sm text-muted-foreground font-medium uppercase tracking-wider mt-1">Total Sold Cost Price</p>
@@ -622,19 +623,51 @@ export default function VehiclesList() {
             </Button>
           </div>
         )}
-        <div className="sm:ml-auto z-10">
-           <span className="text-sm font-medium text-muted-foreground bg-background/50 px-3 py-1.5 rounded-lg border border-white/5">
-             {filtered.length} Results
-           </span>
+        <div className="sm:ml-auto z-10 flex items-center gap-3">
+          {/* View Mode Toggle */}
+          <div className="flex items-center bg-muted/60 dark:bg-white/5 p-1 rounded-xl border border-white/10">
+            <Button
+              type="button"
+              variant={viewMode === "cards" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("cards")}
+              className={`h-8 px-3 rounded-lg text-xs font-semibold gap-1.5 transition-all ${
+                viewMode === "cards" 
+                  ? "bg-[#181d2f] text-white dark:bg-white dark:text-slate-900 shadow-sm" 
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Cards</span>
+            </Button>
+            <Button
+              type="button"
+              variant={viewMode === "table" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("table")}
+              className={`h-8 px-3 rounded-lg text-xs font-semibold gap-1.5 transition-all ${
+                viewMode === "table" 
+                  ? "bg-[#181d2f] text-white dark:bg-white dark:text-slate-900 shadow-sm" 
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <List className="w-3.5 h-3.5" />
+              <span>Table</span>
+            </Button>
+          </div>
+
+          <span className="text-sm font-medium text-muted-foreground bg-background/50 px-3 py-1.5 rounded-lg border border-white/5 hidden sm:inline-block">
+            {filtered.length} Results
+          </span>
         </div>
       </div>
 
       {/* Main Content Area */}
       {isLoading ? (
         <div className="space-y-4">
-          {[1,2,3,4,5].map(i => <div key={i} className="h-16 w-full rounded-2xl bg-card/40 animate-pulse" />)}
+          {[1,2,3,4,5].map(i => <div key={i} className="h-16 w-full rounded-2xl bg-card/40 animate-pulse border border-white/5" />)}
         </div>
-      ) : paged.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div className="bento-card p-12 flex flex-col items-center justify-center text-center">
           <div className={`${activeTab === 'sold' ? 'bg-blue-500/10' : 'bg-sky-500/10'} p-5 rounded-full mb-4`}>
             {activeTab === 'sold' ? <CheckCircle className="h-10 w-10 text-blue-500" /> : <Car className="h-10 w-10 text-sky-500" />}
@@ -650,15 +683,163 @@ export default function VehiclesList() {
               : "We couldn't find any vehicles matching your current search criteria."}
           </p>
           {(search || conditionFilter !== 'all' || sourceCompanyFilter !== 'all' || selectedMonth !== 'all') && (
-            <Button variant="outline" onClick={() => { setSearch(''); setConditionFilter('all'); setSourceCompanyFilter('all'); setSelectedMonth('all'); setSelectedWeek('all'); }} className="rounded-xl">
+            <Button variant="outline" onClick={() => { setSearch(''); setConditionFilter('all'); setSourceCompanyFilter('all'); setSelectedMonth('all'); setSelectedWeek('all'); setPage(0); }} className="rounded-xl">
               Clear Filters
             </Button>
           )}
         </div>
+      ) : viewMode === "cards" ? (
+        /* Split-Panel Vehicles Cards Modeled After Reference Design */
+        <div className="space-y-4">
+          {paged.map((v) => {
+            const vehicleRef = v.vin ? `VIN: ${v.vin.slice(0, 11)}...` : `REF-${v.id.slice(0, 8).toUpperCase()}`;
+            const dateStr = v.date_arrived ? new Date(v.date_arrived).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "In Stock";
+            const isSold = v.status?.toLowerCase() === 'sold';
+            const isAvailable = v.status?.toLowerCase() === 'available';
+
+            return (
+              <div 
+                key={v.id} 
+                className="rounded-[22px] overflow-hidden border border-border/50 dark:border-white/10 bg-white dark:bg-[#151a26] shadow-md hover:shadow-xl transition-all flex flex-col md:flex-row group"
+              >
+                {/* Left Panel: Solid Dark Contrast (Modeled after reference left section) */}
+                <div className="w-full md:w-[32%] lg:w-[28%] bg-[#111728] dark:bg-[#0c101a] text-white p-5 md:p-6 flex flex-col justify-between shrink-0 relative">
+                  <div>
+                    <div className="flex items-center justify-between mb-2.5">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        FLEET VEHICLE
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400/80">
+                        {vehicleRef}
+                      </span>
+                    </div>
+
+                    <h3 className="text-base md:text-lg font-bold text-white leading-snug tracking-tight group-hover:text-amber-400 transition-colors">
+                      {v.year} {v.make} {v.model}
+                    </h3>
+
+                    <p className="text-[11px] text-slate-400 mt-2 flex items-center gap-1.5 truncate">
+                      <span className="text-slate-200 font-medium">{v.trim || "Standard"}</span>
+                      {v.color && <span className="opacity-70">• {v.color}</span>}
+                    </p>
+                  </div>
+
+                  {/* Bottom link modeled after "View all chapters >" in reference image */}
+                  <div className="mt-5 pt-3 border-t border-white/10">
+                    <Link 
+                      to={`/vehicles/${v.id}`}
+                      className="flex items-center justify-between text-xs text-slate-300 font-medium group/link cursor-pointer hover:text-white transition-colors"
+                      title={v.source_company || "Direct Fleet"}
+                    >
+                      <div className="flex items-center gap-1.5 truncate">
+                        <Package className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="truncate">{v.source_company ? `Source: ${v.source_company}` : "Direct Fleet"}</span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-slate-400 shrink-0 transition-transform group-hover/link:translate-x-0.5" />
+                    </Link>
+                  </div>
+                </div>
+
+                {/* Right Panel: Clean Surface (Modeled after reference right section) */}
+                <div className="flex-1 p-5 md:p-6 flex flex-col justify-between gap-5 bg-card dark:bg-[#151a26]">
+                  {/* Top section: Condition/Date + Price + Status Badge */}
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                        CONDITION: {v.condition?.toUpperCase() || "USED"} • ARRIVED {dateStr}
+                      </p>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <h2 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight font-mono">
+                          ₦{Number(v.price).toLocaleString()}
+                        </h2>
+                        {isAvailable ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            Available
+                          </span>
+                        ) : isSold ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-blue-500/15 text-blue-500 border border-blue-500/30">
+                            <CheckCircle className="w-3 h-3 text-blue-500" />
+                            Sold Out
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-amber-500/15 text-amber-500 border border-amber-500/30">
+                            <Clock className="w-3 h-3 text-amber-500" />
+                            {v.status || "Reserved"}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Progress Bar (Matching reference image: "6/9 Challenges" style) */}
+                    <div className="flex flex-col sm:items-end gap-1.5">
+                      <div className="w-36 sm:w-44 h-2 bg-muted/60 dark:bg-white/10 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full rounded-full transition-all duration-500 ${isSold ? 'bg-blue-500 w-full' : isAvailable ? 'bg-emerald-500 w-full' : 'bg-amber-500 w-3/4'}`}
+                        />
+                      </div>
+                      <p className="text-[11px] font-semibold text-muted-foreground">
+                        {isSold ? "Fleet Asset Settled" : isAvailable ? "Ready for Sale" : "Processing / Reserved"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Bottom section: Action Pill Buttons (like Continue in reference image) */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-border/40 dark:border-white/5">
+                    <div className="flex items-center gap-2">
+                      {v.vin && (
+                        <span className="font-mono text-xs bg-muted/60 dark:bg-white/5 px-3 py-1 rounded-full text-muted-foreground border border-border/30">
+                          {v.vin}
+                        </span>
+                      )}
+
+                      {hasEdit && (
+                        <div className="flex items-center gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            asChild
+                            className="rounded-full h-9 w-9 hover:bg-muted text-muted-foreground hover:text-foreground"
+                            title="Edit Vehicle"
+                          >
+                            <Link to={`/vehicles/${v.id}/edit`}>
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Link>
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => setDeleteId(v.id)} 
+                            className="rounded-full h-9 w-9 hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                            title="Delete Vehicle"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Primary Pill Button exactly like Continue in reference */}
+                    <Button
+                      size="sm"
+                      asChild
+                      className="rounded-full px-6 h-9 bg-[#181d2f] hover:bg-[#252c42] dark:bg-white dark:hover:bg-slate-200 text-white dark:text-slate-900 font-bold text-xs tracking-wide shadow-lg shadow-black/20 hover:shadow-xl transition-all active:scale-95 gap-2"
+                    >
+                      <Link to={`/vehicles/${v.id}`}>
+                        <Eye className="w-3.5 h-3.5" />
+                        View Details
+                      </Link>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ) : (
+        /* Desktop Table View */
         <div className="bento-card overflow-hidden">
-          {/* Desktop Table View */}
-          <div className="hidden md:block overflow-x-auto w-full">
+          <div className="table-container">
             <Table className="w-full">
               <TableHeader className="bg-foreground/5 pointer-events-none">
                 <TableRow className="border-border/50 hover:bg-transparent">
@@ -718,104 +899,22 @@ export default function VehiclesList() {
               </TableBody>
             </Table>
           </div>
+        </div>
+      )}
 
-          {/* Mobile Cards View - Redesigned for mobile compatibility */}
-          <div className="md:hidden flex flex-col divide-y divide-border/10">
-            {paged.map((v) => (
-              <div key={v.id} className="p-4 flex flex-col gap-4 bg-card/30">
-                <div className="flex justify-between items-start gap-4">
-                  <div className="flex items-start gap-3 min-w-0">
-                     <div className="p-2.5 rounded-2xl bg-sky-500/10 shrink-0">
-                       <Car className="h-5 w-5 text-sky-500" />
-                     </div>
-                     <div className="min-w-0">
-                       <p className="font-bold text-foreground text-sm truncate">{v.year} {v.make} {v.model}</p>
-                       <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mt-0.5">{v.trim || "Standard Trim"}</p>
-                       {v.vin && (
-                         <div className="mt-2 bg-foreground/5 px-2 py-1 rounded-lg border border-white/5 inline-block max-w-full">
-                           <p className="text-[9px] text-muted-foreground font-mono truncate uppercase">VIN: {v.vin}</p>
-                         </div>
-                       )}
-                     </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-2 shrink-0">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${
-                      v.status?.toLowerCase() === 'available' ? 'bg-emerald-500/10 text-emerald-500' : 
-                      v.status?.toLowerCase() === 'sold' ? 'bg-blue-500/10 text-blue-500' : 'bg-amber-500/10 text-amber-500'
-                    }`}>
-                      {v.status || "Unknown"}
-                    </span>
-                    <p className="font-bold text-xs text-foreground">₦{Number(v.price).toLocaleString()}</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-1">
-                  <div className="bg-foreground/5 p-2 rounded-xl border border-white/5">
-                    <p className="text-[9px] text-muted-foreground uppercase font-bold">Condition</p>
-                    <p className="text-xs font-semibold">{v.condition || "Used"}</p>
-                  </div>
-                  <div className="bg-foreground/5 p-2 rounded-xl border border-white/5">
-                    <p className="text-[9px] text-muted-foreground uppercase font-bold">Source</p>
-                    <p className="text-xs font-semibold truncate">{v.source_company || "Direct"}</p>
-                  </div>
-                </div>
-
-                <div className="flex gap-2 pt-2 border-t border-border/10">
-                  <Button variant="outline" size="sm" asChild className="flex-1 h-9 text-xs rounded-xl border-white/10 glass-panel">
-                    <Link to={`/vehicles/${v.id}`}>View Details</Link>
-                  </Button>
-                  {hasEdit && (
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="icon" asChild className="h-9 w-9 rounded-xl border-white/10 glass-panel">
-                        <Link to={`/vehicles/${v.id}/edit`}><Pencil className="h-4 w-4" /></Link>
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => setDeleteId(v.id)} className="h-9 w-9 rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive bg-destructive/5 border border-destructive/10">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="p-6 border-t border-border/10">
-              <Pagination>
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious 
-                      onClick={() => page > 0 && setPage(page - 1)}
-                      className={page === 0 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                    />
-                  </PaginationItem>
-                  
-                  {[...Array(totalPages)].map((_, i) => (
-                    <PaginationItem key={i} className="hidden sm:block">
-                      <PaginationLink 
-                        isActive={page === i}
-                        onClick={() => setPage(i)}
-                        className="cursor-pointer"
-                      >
-                        {i + 1}
-                      </PaginationLink>
-                    </PaginationItem>
-                  ))}
-
-                  <PaginationItem>
-                    <PaginationNext 
-                      onClick={() => page < totalPages - 1 && setPage(page + 1)}
-                      className={page >= totalPages - 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                    />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-              <div className="text-center mt-4 text-xs text-muted-foreground sm:hidden">
-                Page {page + 1} of {totalPages}
-              </div>
-            </div>
-          )}
+      {/* Reference-Styled Pagination Component */}
+      {filtered.length > 0 && (
+        <div className="pt-2">
+          <CustomPagination
+            currentPage={page}
+            totalPages={totalPages}
+            totalItems={filtered.length}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            pageSizeOptions={[5, 8, 15, 25, 50]}
+            itemLabel="vehicles"
+          />
         </div>
       )}
 

@@ -40,8 +40,8 @@ export default function CustomerPortal() {
 
       {/* Header */}
       <header className="p-6 border-b border-white/5 bg-background/50 backdrop-blur-xl z-10 flex items-center gap-4">
-        <img src={logo} alt="Lamido Cars" className="h-10 w-10 rounded-xl" />
-        <h1 className="text-xl font-heading font-bold tracking-tight uppercase tracking-widest">Lamido Cars Ltd. <span className="opacity-50">Portal</span></h1>
+        <img src={logo} alt="Abuja Best Cars" className="h-10 w-10 rounded-full object-cover border border-white/10" />
+        <h1 className="text-xl font-heading font-bold tracking-tight uppercase tracking-widest">Abuja Best Cars <span className="opacity-50">Portal</span></h1>
       </header>
 
       <main className="flex-1 p-6 md:p-10 z-10 max-w-4xl w-full mx-auto animate-fade-up">

@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { RichTextEditor, type DocumentData } from "@/components/RichTextEditor";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { logAction } from "@/lib/logger";
 
 // ---------- Templates (unchanged) ----------
 const TEMPLATES = [
@@ -43,7 +44,7 @@ const TEMPLATES = [
         This Vehicle Sales Agreement (the "Agreement") is entered into this <strong><u>[DAY]</u></strong> day of <strong><u>[MONTH]</u></strong>, <strong><u>[YEAR]</u></strong>, by and between:
       </p>
       <p style="margin-bottom: 8px;">
-        <strong>SELLER:</strong> Lamido Cars Ltd., located at Plot 36A &amp; 36B Wole Soyinka way, Cadastral zone B15, Jahi, Abuja.
+        <strong>SELLER:</strong> Abuja Best Cars, located at 38 Gana St, Maitama, Abuja 904101, FCT.
       </p>
       <p style="margin-bottom: 20px;">
         <strong>BUYER:</strong> ____________________________________________________________________
@@ -88,7 +89,7 @@ const TEMPLATES = [
         <tbody>
           <tr style="border: none;">
             <td style="border: none; padding: 12px; width: 45%; vertical-align: top;">
-              <p style="margin-bottom: 40px;">For: <strong>Lamido Cars Ltd. (Seller)</strong></p>
+              <p style="margin-bottom: 40px;">For: <strong>Abuja Best Cars (Seller)</strong></p>
               <div style="border-top: 1px solid #000; padding-top: 4px;">
                 Authorized Signature &amp; Stamp<br><span style="font-size: 11px; color: #64748b;">Date: ____ / ____ / ________</span>
               </div>
@@ -113,7 +114,7 @@ const TEMPLATES = [
     content: `
       <h1 style="text-align: center; color: #1e293b; margin-bottom: 24px;">AUTHORITY TO SELL AGREEMENT</h1>
       <p style="text-align: justify; margin-bottom: 16px;">
-        I, the undersigned owner, hereby authorize <strong>Lamido Cars Ltd.</strong> (the "Agent") to display, advertise, and sell the vehicle described below on my behalf.
+        I, the undersigned owner, hereby authorize <strong>Abuja Best Cars</strong> (the "Agent") to display, advertise, and sell the vehicle described below on my behalf.
       </p>
       <h2 style="color: #334155; margin-top: 24px; margin-bottom: 12px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px;">1. OWNER INFORMATION</h2>
       <p style="margin-bottom: 4px;"><strong>Full Name:</strong> ____________________________________________________________________</p>
@@ -150,7 +151,7 @@ const TEMPLATES = [
         <tbody>
           <tr style="border: none;">
             <td style="border: none; padding: 12px; width: 45%; vertical-align: top;">
-              <p style="margin-bottom: 40px;">For: <strong>Lamido Cars Ltd. (Agent)</strong></p>
+              <p style="margin-bottom: 40px;">For: <strong>Abuja Best Cars (Agent)</strong></p>
               <div style="border-top: 1px solid #000; padding-top: 4px;">Representative Signature</div>
             </td>
             <td style="border: none; width: 10%;"></td>
@@ -178,7 +179,7 @@ const TEMPLATES = [
               <strong>PREPARED FOR:</strong><br>Name: _______________________________<br>Phone: ______________________________<br>Email: ______________________________
             </td>
             <td style="border: none; width: 50%; padding: 4px 0; text-align: right; vertical-align: top;">
-              <strong>VALID UNTIL:</strong> 30 Days from date of issue<br><strong>PREPARED BY:</strong> Lamido Sales Dept.
+              <strong>VALID UNTIL:</strong> 30 Days from date of issue<br><strong>PREPARED BY:</strong> Abuja Best Cars Sales Dept.
             </td>
           </tr>
         </tbody>
@@ -210,7 +211,7 @@ const TEMPLATES = [
       </table>
       <h2 style="color: #334155; margin-top: 24px; margin-bottom: 12px; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px;">BANKING &amp; PAYMENT DETAILS</h2>
       <p style="margin-bottom: 4px;"><strong>Bank Name:</strong> Access Bank Plc</p>
-      <p style="margin-bottom: 4px;"><strong>Account Name:</strong> Lamido Cars Ltd.</p>
+      <p style="margin-bottom: 4px;"><strong>Account Name:</strong> Abuja Best Cars</p>
       <p style="margin-bottom: 16px;"><strong>Account Number:</strong> 0077777211</p>`
   },
   {
@@ -225,10 +226,10 @@ const TEMPLATES = [
       <p style="margin-bottom: 20px;">Dear Sir/Ma,</p>
       <p style="margin-bottom: 16px; font-weight: bold; text-decoration: underline; text-transform: uppercase;">SUBJECT: INTRODUCTORY PROPOSAL FOR FLEET MAINTENANCE SERVICES</p>
       <p style="text-align: justify; margin-bottom: 16px;">
-        We write to formally introduce <strong>Lamido Cars Ltd.</strong>, a premier automotive repair, customization, and maintenance workshop situated in Jahi, Abuja.
+        We write to formally introduce <strong>Abuja Best Cars</strong>, a premier automotive dealership, sales, and maintenance hub situated in Maitama, Abuja.
       </p>
       <p style="text-align: justify; margin-bottom: 24px;">We look forward to an opportunity to present a detailed proposal and inspect your fleet. Thank you for your time and consideration.</p>
-      <p style="margin-bottom: 40px;">Yours Faithfully,<br><br><br><strong>Engr. Beatrice T.</strong><br>General Manager, Lamido Cars Ltd.</p>`
+      <p style="margin-bottom: 40px;">Yours Faithfully,<br><br><br><strong>Management</strong><br>Abuja Best Cars</p>`
   }
 ];
 
@@ -275,6 +276,7 @@ export default function Documents() {
   // ── Upsert (create or update) ──────────────────────────────────────────────
   const upsertMutation = useMutation({
     mutationFn: async (doc: DocumentData) => {
+      const isExisting = documents.some(d => d.id === doc.id);
       const { error } = await (supabase as any).from("documents").upsert({
         id: doc.id,
         user_id: user!.id,
@@ -289,6 +291,7 @@ export default function Documents() {
         updated_at: new Date().toISOString(),
       });
       if (error) throw error;
+      await logAction(isExisting ? "UPDATE" : "CREATE", "Document", doc.id, { title: doc.title });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["documents"] });
@@ -299,8 +302,10 @@ export default function Documents() {
   // ── Delete ─────────────────────────────────────────────────────────────────
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
+      const targetDoc = documents.find(d => d.id === id);
       const { error } = await (supabase as any).from("documents").delete().eq("id", id);
       if (error) throw error;
+      await logAction("DELETE", "Document", id, { title: targetDoc?.title });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["documents"] });
@@ -518,7 +523,7 @@ export default function Documents() {
             Start with a Premium Template
           </CardTitle>
           <CardDescription className="text-xs">
-            Generate standard documents in seconds pre-formatted for Lamido Cars.
+            Generate standard documents in seconds pre-formatted for Abuja Best Cars.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-6 pt-0">
@@ -673,6 +678,7 @@ export default function Documents() {
                             onClick={(e) => {
                               e.stopPropagation();
                               setActiveDoc(doc);
+                              logAction("PRINT", "Document", doc.id, { title: doc.title, ref: doc.title });
                               setTimeout(() => window.print(), 500);
                             }}
                             className="h-8 w-8 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"

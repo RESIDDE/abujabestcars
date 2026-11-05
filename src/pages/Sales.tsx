@@ -27,12 +27,13 @@ import {
 import {
   Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious,
 } from "@/components/ui/pagination";
+import { CustomPagination } from "@/components/CustomPagination";
 import { Card, CardContent } from "@/components/ui/card";
 import { 
   PlusCircle, Pencil, Trash2, Receipt, Download, FileText, Printer, FileOutput, 
   DollarSign, Calendar, Search, Car, Users, QrCode, CheckCircle, Image, FileDown,
   TrendingUp, TrendingDown, ShoppingBag, Target, ArrowUpRight, BarChart3, PieChart as PieChartIcon,
-  Mail, ListFilter, ArrowLeft, AlertCircle, BadgeCheck, Banknote
+  ListFilter, ArrowLeft, AlertCircle, BadgeCheck, Banknote, ChevronRight, LayoutGrid, List
 } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -56,6 +57,7 @@ import { CurrencyInput } from "@/components/CurrencyInput";
 import { CustomerSelect } from "@/components/CustomerSelect";
 import { useCustomerDuplicates } from "@/hooks/useCustomerDuplicates";
 import { CustomerSuggestion } from "@/components/CustomerSuggestion";
+import { SalePrintPreview } from "@/components/sales/SalePrintPreview";
 
 const COLORS = ["hsl(var(--primary))", "hsl(142 76% 36%)", "hsl(38 92% 50%)", "hsl(262 83% 58%)", "hsl(0 84% 60%)", "hsl(199 89% 48%)"];
 
@@ -114,7 +116,8 @@ export default function Sales() {
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
   const [selectedWeek, setSelectedWeek] = useState<string>("all");
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<string>("all");
-  const PAGE_SIZE = 15;
+  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
+  const [pageSize, setPageSize] = useState(8);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -123,11 +126,16 @@ export default function Sales() {
   const [newPaymentMethod, setNewPaymentMethod] = useState("cash");
   const [newPaymentNote, setNewPaymentNote] = useState("");
   const [printPaymentId, setPrintPaymentId] = useState<string | null>(null);
+  const [printMode, setPrintMode] = useState(false);
+  const [previewSale, setPreviewSale] = useState<any>(null);
+  const [previewPayment, setPreviewPayment] = useState<any>(null);
+  const [previewPaymentIndex, setPreviewPaymentIndex] = useState<number | undefined>(undefined);
+  const [previewAllPayments, setPreviewAllPayments] = useState<any[]>([]);
 
   const { data: sales = [], isLoading, isError } = useQuery({
     queryKey: ["sales"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("sales").select("*, sale_vehicles(*)").order("created_at", { ascending: false });
+      const { data, error } = await supabase.from("sales").select("*, sale_vehicles(*), sale_payments(*)").order("created_at", { ascending: false });
       if (error) throw error;
       return data;
     },
@@ -139,6 +147,11 @@ export default function Sales() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'sales' },
+        () => queryClient.invalidateQueries({ queryKey: ["sales"] })
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'sale_payments' },
         () => queryClient.invalidateQueries({ queryKey: ["sales"] })
       )
       .subscribe();
@@ -223,6 +236,33 @@ export default function Sales() {
     return Array.from(companies).sort();
   }, [vehicles]);
 
+  const getSalePaymentInfo = (s: any) => {
+    const payments = s.sale_payments || [];
+    const totalPaid = payments.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+    const salePrice = Number(s.sale_price) || 0;
+    
+    if (payments.length > 0) {
+      const balance = Math.max(0, salePrice - totalPaid);
+      const isDeposit = balance > 0 || s.payment_status === "deposit";
+      return {
+        isDeposit,
+        isPaidInFull: balance <= 0 && totalPaid >= salePrice,
+        totalPaid,
+        balance,
+        hasPayments: true,
+      };
+    }
+
+    const isDeposit = s.payment_status === "deposit";
+    return {
+      isDeposit,
+      isPaidInFull: !isDeposit,
+      totalPaid: isDeposit ? 0 : salePrice,
+      balance: isDeposit ? salePrice : 0,
+      hasPayments: false,
+    };
+  };
+
   const filtered = sales.filter((s) => {
     const q = search.toLowerCase();
     const vName = (vehicleMap[s.vehicle_id] || "").toLowerCase();
@@ -249,14 +289,16 @@ export default function Sales() {
     }
 
     if (paymentStatusFilter !== "all") {
-      if (s.payment_status !== paymentStatusFilter) return false;
+      const info = getSalePaymentInfo(s);
+      if (paymentStatusFilter === "deposit" && !info.isDeposit) return false;
+      if (paymentStatusFilter === "paid_in_full" && !info.isPaidInFull) return false;
     }
 
     return !q || vName.includes(q) || cName.includes(q);
   });
 
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paged = filtered.slice(page * pageSize, (page + 1) * pageSize);
 
   const upsertMutation = useMutation({
     mutationFn: async () => {
@@ -500,6 +542,18 @@ export default function Sales() {
   };
 
   const printPaymentReceipt = (sale: any, payment: any, paymentIndex: number, allPayments: any[]) => {
+    logAction("PRINT", "Sales Payment", payment.id, {
+      sale_id: sale.id,
+      amount: payment.amount,
+      method: payment.payment_method,
+    });
+    setPreviewSale(sale);
+    setPreviewPayment(payment);
+    setPreviewPaymentIndex(paymentIndex);
+    setPreviewAllPayments(allPayments);
+    setPaymentSaleId(null);
+    setPrintMode(true);
+    return;
     const cust = customerObjMap[sale.customer_id];
     const totalSalePrice = Number(sale.sale_price) || 0;
     const paymentAmount = Number(payment.amount) || 0;
@@ -646,9 +700,27 @@ export default function Sales() {
     }
   };
 
-  const handlePrintReceipt = (sale: any) => {
-    toast.info("Preparing receipt...");
-    logAction("PRINT", "Sales", sale.id, { vehicle: sale.sale_vehicles?.[0]?.vehicle ? `${sale.sale_vehicles[0].vehicle.year} ${sale.sale_vehicles[0].vehicle.make} ${sale.sale_vehicles[0].vehicle.model}` : "Vehicle" });
+  const handlePrintReceipt = async (sale: any) => {
+    logAction("PRINT", "Sales", sale.id, {
+      vehicle: sale.sale_vehicles?.[0]?.vehicle
+        ? `${sale.sale_vehicles[0].vehicle.year} ${sale.sale_vehicles[0].vehicle.make} ${sale.sale_vehicles[0].vehicle.model}`
+        : "Vehicle",
+    });
+    try {
+      const { data: payments } = await supabase
+        .from("sale_payments" as any)
+        .select("*")
+        .eq("sale_id", sale.id)
+        .order("payment_date", { ascending: false });
+      setPreviewAllPayments(payments || []);
+    } catch {
+      setPreviewAllPayments([]);
+    }
+    setPreviewSale(sale);
+    setPreviewPayment(null);
+    setPreviewPaymentIndex(undefined);
+    setPrintMode(true);
+    return;
     const html = `<html><head><title>Receipt - ${sale.id.slice(0, 8).toUpperCase()}</title>
     <style>
       @page { margin: 0; size: A4; }
@@ -690,14 +762,13 @@ export default function Sales() {
     }
   };
 
-  const downloadSaleReceipt = async (sale: any, type: 'pdf' | 'png' | 'jpeg', isEmail = false) => {
+  const downloadSaleReceipt = async (sale: any, type: 'pdf' | 'png' | 'jpeg') => {
     const cust = customerObjMap[sale.customer_id];
     const filename = `receipt-${sale.id.slice(0, 8)}`;
 
     try {
       console.log("Starting document generation for:", filename, "Format:", type);
-      if (isEmail) toast.loading("Preparing link for email...", { id: "sale-dl" });
-      else toast.loading(`Preparing ${type.toUpperCase()} download...`, { id: "sale-dl" });
+      toast.loading(`Preparing ${type.toUpperCase()} download...`, { id: "sale-dl" });
 
       console.log("Fetching logo asset...");
       const logoBase64 = await fetch(logoAsset)
@@ -775,47 +846,16 @@ export default function Sales() {
         fileExt = 'pdf';
       }
 
-      if (isEmail) {
-        const filePath = `${sale.id}/${filename}-${Date.now()}.${fileExt}`;
-        console.log("Uploading to storage:", filePath);
-        const { data, error: uploadErr } = await supabase.storage
-          .from('documents')
-          .upload(filePath, fileBlob, { contentType: `application/${fileExt === 'pdf' ? 'pdf' : 'image/' + fileExt}` });
-        
-        if (uploadErr) {
-          console.error("Supabase Storage Upload Error:", uploadErr);
-          throw uploadErr;
-        }
-
-        console.log("Upload successful, getting public URL...");
-        const { data: { publicUrl } } = supabase.storage.from('documents').getPublicUrl(filePath);
-        console.log("Public URL generated:", publicUrl);
-
-        // Update database with receipt URL
-        await supabase.from("sales" as any).update({ receipt_url: publicUrl }).eq("id", sale.id);
-
-        if (cust?.email) {
-          const subject = `Sales Receipt - Lamido Cars`;
-          const body = `Hello ${cust.name || 'Customer'},\n\nPlease find your sales receipt attached below.\n\nYou can also download it directly here: ${publicUrl}\n\nThank you for choosing Lamido Cars!`;
-          window.location.href = `mailto:${cust.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-          toast.success("Link generated! Opening email client...", { id: "sale-dl" });
-        } else {
-          toast.error("Customer email not found.", { id: "sale-dl" });
-        }
-        logAction("EXPORT", "Sales", sale.id, { vehicle: sale.sale_vehicles?.[0]?.vehicle ? `${sale.sale_vehicles[0].vehicle.year} ${sale.sale_vehicles[0].vehicle.make} ${sale.sale_vehicles[0].vehicle.model}` : "Vehicle", format: fileExt.toUpperCase(), method: "Email" });
-        document.body.removeChild(iframe);
-      } else {
-        console.log("Triggering browser download...");
-        const url = URL.createObjectURL(fileBlob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${filename}.${fileExt}`;
-        a.click();
-        URL.revokeObjectURL(url);
-        logAction("EXPORT", "Sales", sale.id, { vehicle: sale.sale_vehicles?.[0]?.vehicle ? `${sale.sale_vehicles[0].vehicle.year} ${sale.sale_vehicles[0].vehicle.make} ${sale.sale_vehicles[0].vehicle.model}` : "Vehicle", format: fileExt.toUpperCase(), method: "Download" });
-        document.body.removeChild(iframe);
-        toast.success("Download complete", { id: "sale-dl" });
-      }
+      console.log("Triggering browser download...");
+      const url = URL.createObjectURL(fileBlob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${filename}.${fileExt}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      logAction("EXPORT", "Sales", sale.id, { vehicle: sale.sale_vehicles?.[0]?.vehicle ? `${sale.sale_vehicles[0].vehicle.year} ${sale.sale_vehicles[0].vehicle.make} ${sale.sale_vehicles[0].vehicle.model}` : "Vehicle", format: fileExt.toUpperCase(), method: "Download" });
+      document.body.removeChild(iframe);
+      toast.success("Download complete", { id: "sale-dl" });
     } catch (err) {
       console.error("Download error:", err);
       toast.error("Failed to generate document", { id: "sale-dl" });
@@ -874,6 +914,27 @@ export default function Sales() {
     }
   };
 
+  if (printMode && previewSale) {
+    return (
+      <SalePrintPreview
+        sale={previewSale}
+        customer={customerObjMap[previewSale.customer_id]}
+        vehicles={vehicles}
+        payment={previewPayment}
+        paymentIndex={previewPaymentIndex}
+        allPayments={previewAllPayments}
+        onBack={() => {
+          setPrintMode(false);
+          setPreviewSale(null);
+          setPreviewPayment(null);
+          setPreviewPaymentIndex(undefined);
+          setPreviewAllPayments([]);
+        }}
+        onDownloadPdf={() => downloadSaleReceipt(previewSale, "pdf")}
+      />
+    );
+  }
+
   return (
     <>
       <div className="space-y-8 animate-fade-up pb-10 max-w-6xl mx-auto">
@@ -881,8 +942,8 @@ export default function Sales() {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <DollarSign className="w-3.5 h-3.5 text-violet-400/60" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-violet-400/60">Revenue</span>
+            <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-emerald-500">Revenue</span>
           </div>
           <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-white/90">
             Sales
@@ -901,7 +962,7 @@ export default function Sales() {
             variant="outline" 
             size="sm" 
             onClick={() => setShowAnalytics(!showAnalytics)}
-            className={`rounded-xl glass-panel border-white/10 transition-all text-xs h-9 ${showAnalytics ? 'bg-violet-500/20 text-violet-500 border-violet-500/20' : 'hover:bg-white/5'}`}
+            className={`rounded-xl glass-panel border-white/10 transition-all text-xs h-9 ${showAnalytics ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'hover:bg-white/5'}`}
           >
             <TrendingUp className="mr-1.5 h-3.5 w-3.5" /> {showAnalytics ? "Hide Analytics" : "Analytics"}
           </Button>
@@ -914,8 +975,8 @@ export default function Sales() {
             <DropdownMenuContent className="rounded-xl glass-panel p-2 shadow-2xl border-white/10" align="end">
               <DropdownMenuItem onClick={handleExportExcel} className="rounded-lg cursor-pointer"><FileText className="mr-2 h-4 w-4" /> Export to Excel</DropdownMenuItem>
               <DropdownMenuItem onClick={handleExportJSON} className="rounded-lg cursor-pointer"><FileText className="mr-2 h-4 w-4" /> Export to JSON</DropdownMenuItem>
-              <DropdownMenuItem onClick={handlePrint} className="rounded-lg cursor-pointer text-violet-500"><Printer className="mr-2 h-4 w-4" /> Print Sales List</DropdownMenuItem>
-              <DropdownMenuItem onClick={handleBulkPrintReceipts} className="rounded-lg cursor-pointer text-violet-500 border-t border-white/5 mt-1 pt-2"><Receipt className="mr-2 h-4 w-4" /> Print All Receipts (PDF)</DropdownMenuItem>
+              <DropdownMenuItem onClick={handlePrint} className="rounded-lg cursor-pointer"><Printer className="mr-2 h-4 w-4" /> Print Sales List</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleBulkPrintReceipts} className="rounded-lg cursor-pointer border-t border-white/5 mt-1 pt-2"><Receipt className="mr-2 h-4 w-4" /> Print All Receipts (PDF)</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -929,7 +990,7 @@ export default function Sales() {
                 <div className="flex justify-between items-start mb-4">
                   <div className="p-3 bg-emerald-500/10 rounded-2xl"><DollarSign className="h-6 w-6 text-emerald-500" /></div>
                 </div>
-                <h3 className="text-3xl font-bold text-violet-500">₦{filtered.reduce((sum, s) => sum + (Number(s.sale_price) || 0), 0).toLocaleString()}</h3>
+                <h3 className="text-3xl font-bold text-emerald-500">₦{filtered.reduce((sum, s) => sum + (Number(s.sale_price) || 0), 0).toLocaleString()}</h3>
                 <p className="text-sm text-muted-foreground font-medium uppercase tracking-wider mt-1">Total revenue</p>
               </CardContent>
             </Card>
@@ -1040,23 +1101,22 @@ export default function Sales() {
         </div>
       )}
 
-      {/* Search Bar */}
-      <div className="glass-panel p-4 rounded-3xl flex flex-col sm:flex-row gap-4 items-center relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-violet-500/5 to-transparent pointer-events-none" />
-        <div className="relative w-full group z-10 flex flex-col sm:flex-row gap-4 items-center">
+      {/* Search and Filters Bar with View Switch */}
+      <div className="glass-panel p-4 rounded-3xl flex flex-col gap-4 relative overflow-hidden">
+        <div className="relative w-full group z-10 flex flex-col sm:flex-row gap-3 items-center">
           <div className="relative flex-1 w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-violet-500 transition-colors pointer-events-none" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-emerald-500 transition-colors pointer-events-none" />
             <Input 
               placeholder="Search by vehicle or customer name..." 
               value={search} 
               onChange={(e) => { setSearch(e.target.value); setPage(0); }} 
-              className="pl-10 h-10 rounded-xl bg-background/50 border-white/10 focus-visible:ring-violet-500/50 transition-all font-medium text-sm w-full"
+              className="pl-10 h-10 rounded-xl bg-background/50 border-white/10 focus-visible:ring-emerald-500/50 transition-all font-medium text-sm w-full"
             />
           </div>
           
-          <div className="w-full sm:w-[200px] shrink-0">
+          <div className="w-full sm:w-[180px] shrink-0">
             <Select value={selectedMonth} onValueChange={(v) => { setSelectedMonth(v); setPage(0); }}>
-              <SelectTrigger className="h-10 rounded-xl bg-background/50 border-white/10 focus:ring-violet-500/50 transition-all">
+              <SelectTrigger className="h-10 rounded-xl bg-background/50 border-white/10 focus:ring-emerald-500/50 transition-all">
                 <div className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                   <SelectValue placeholder="Select Month" />
@@ -1077,9 +1137,9 @@ export default function Sales() {
             </Select>
           </div>
 
-          <div className="w-full sm:w-[150px] shrink-0">
+          <div className="w-full sm:w-[130px] shrink-0">
             <Select value={selectedWeek} onValueChange={(v) => { setSelectedWeek(v); setPage(0); }}>
-              <SelectTrigger className="h-10 rounded-xl bg-background/50 border-white/10 focus:ring-violet-500/50 transition-all">
+              <SelectTrigger className="h-10 rounded-xl bg-background/50 border-white/10 focus:ring-emerald-500/50 transition-all">
                 <div className="flex items-center gap-2">
                   <ListFilter className="h-4 w-4 text-muted-foreground" />
                   <SelectValue placeholder="Week" />
@@ -1096,16 +1156,16 @@ export default function Sales() {
             </Select>
           </div>
           
-          <div className="w-full sm:w-[220px] shrink-0">
+          <div className="w-full sm:w-[180px] shrink-0">
             <Select value={sourceCompanyFilter} onValueChange={(v) => { setSourceCompanyFilter(v); setPage(0); }}>
-              <SelectTrigger className="h-10 rounded-xl bg-background/50 border-white/10 focus:ring-violet-500/50 transition-all">
+              <SelectTrigger className="h-10 rounded-xl bg-background/50 border-white/10 focus:ring-emerald-500/50 transition-all">
                 <div className="flex items-center gap-2">
                   <ListFilter className="h-4 w-4 text-muted-foreground" />
                   <SelectValue placeholder="Source Company" />
                 </div>
               </SelectTrigger>
               <SelectContent className="rounded-xl glass-panel">
-                <SelectItem value="all">All Source Companies</SelectItem>
+                <SelectItem value="all">All Sources</SelectItem>
                 {sourceCompanies.map(company => (
                   <SelectItem key={company} value={company}>{company}</SelectItem>
                 ))}
@@ -1113,9 +1173,9 @@ export default function Sales() {
             </Select>
           </div>
 
-          <div className="w-full sm:w-[180px] shrink-0">
+          <div className="w-full sm:w-[170px] shrink-0">
             <Select value={paymentStatusFilter} onValueChange={(v) => { setPaymentStatusFilter(v); setPage(0); }}>
-              <SelectTrigger className="h-10 rounded-xl bg-background/50 border-white/10 focus:ring-violet-500/50 transition-all">
+              <SelectTrigger className="h-10 rounded-xl bg-background/50 border-white/10 focus:ring-emerald-500/50 transition-all">
                 <div className="flex items-center gap-2">
                   <DollarSign className="h-4 w-4 text-muted-foreground" />
                   <SelectValue placeholder="Payment Status" />
@@ -1127,6 +1187,38 @@ export default function Sales() {
                 <SelectItem value="deposit">Deposit (Part Payment)</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          {/* View Mode Switch (Cards vs Table) */}
+          <div className="flex items-center gap-1 bg-background/60 border border-white/10 p-1 rounded-2xl shrink-0 w-full sm:w-auto justify-center">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setViewMode("cards")}
+              className={`h-8 rounded-xl px-3 text-xs font-semibold gap-1.5 transition-all ${
+                viewMode === "cards" 
+                  ? "bg-[#181d2f] text-white dark:bg-white dark:text-slate-900 shadow-sm" 
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Cards</span>
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setViewMode("table")}
+              className={`h-8 rounded-xl px-3 text-xs font-semibold gap-1.5 transition-all ${
+                viewMode === "table" 
+                  ? "bg-[#181d2f] text-white dark:bg-white dark:text-slate-900 shadow-sm" 
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <List className="w-3.5 h-3.5" />
+              <span>Table</span>
+            </Button>
           </div>
         </div>
       </div>
@@ -1147,238 +1239,366 @@ export default function Sales() {
         </div>
       ) : sales.length === 0 ? (
         <div className="bento-card p-12 flex flex-col items-center justify-center text-center">
-          <div className="bg-violet-500/10 p-5 rounded-full mb-4">
-            <DollarSign className="h-10 w-10 text-violet-500" />
+          <div className="bg-emerald-500/10 p-5 rounded-full mb-4">
+            <DollarSign className="h-10 w-10 text-emerald-500" />
           </div>
           <h3 className="text-xl font-bold mb-2">No Sales Recorded</h3>
           <p className="text-muted-foreground max-w-xs mx-auto mb-6">You haven't recorded any sales yet. Click "Record New Sale" to get started.</p>
           {canCreate(role, "sales", permissions) && (
-            <Button onClick={() => setDialogOpen(true)} className="rounded-2xl bg-violet-500 hover:bg-violet-600 shadow-lg shadow-violet-500/20">Record Your First Sale</Button>
+            <Button onClick={() => setDialogOpen(true)} className="rounded-full px-6 py-2.5 bg-[#181d2f] hover:bg-[#252c42] dark:bg-white dark:hover:bg-slate-200 text-white dark:text-slate-900 font-bold text-xs shadow-lg transition-all">
+              Record Your First Sale
+            </Button>
           )}
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="bento-card p-12 text-center text-muted-foreground">
+          <Search className="h-8 w-8 opacity-20 mx-auto mb-2" />
+          <p className="font-medium">No sales match your current filters.</p>
+          <Button variant="link" onClick={() => { setSearch(""); setSelectedMonth("all"); setSelectedWeek("all"); setSourceCompanyFilter("all"); setPaymentStatusFilter("all"); }} className="text-emerald-500 mt-2 font-semibold">
+            Clear all filters
+          </Button>
+        </div>
+      ) : viewMode === "cards" ? (
+        /* Split-Panel Sales Cards Modeled After Reference Design */
+        <div className="space-y-4">
+          {paged.map((s) => {
+            const paymentInfo = getSalePaymentInfo(s);
+            const salePrice = Number(s.sale_price) || 0;
+            const percent = Math.min(100, Math.round((paymentInfo.totalPaid / (salePrice || 1)) * 100));
+            const vehicleName = vehicleMap[s.vehicle_id] || "Vehicle Not Specified";
+            const customerName = customerMap[s.customer_id] || "Customer Not Specified";
+            const customerObj = customerObjMap[s.customer_id];
+            const saleDateStr = new Date(s.sale_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+            const formattedRef = `SALE-${s.id.slice(0, 8).toUpperCase()}`;
+
+            return (
+              <div 
+                key={s.id} 
+                className="rounded-[22px] overflow-hidden border border-border/50 dark:border-white/10 bg-white dark:bg-[#151a26] shadow-md hover:shadow-xl transition-all flex flex-col md:flex-row group"
+              >
+                {/* Left Panel: Solid Dark Contrast (Modeled after reference left section) */}
+                <div className="w-full md:w-[32%] lg:w-[28%] bg-[#111728] dark:bg-[#0c101a] text-white p-5 md:p-6 flex flex-col justify-between shrink-0 relative">
+                  <div>
+                    <div className="flex items-center justify-between mb-2.5">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        VEHICLE
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400/80">
+                        {formattedRef}
+                      </span>
+                    </div>
+                    
+                    <h3 className="text-base md:text-lg font-bold text-white leading-snug tracking-tight group-hover:text-amber-400 transition-colors">
+                      {vehicleName}
+                    </h3>
+
+                    {s.rep_name && (
+                      <p className="text-[11px] text-slate-400 mt-2 flex items-center gap-1.5">
+                        <span className="opacity-60">Rep:</span>
+                        <span className="text-slate-200 font-medium">{s.rep_name}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Bottom link modeled after "View all chapters >" in reference image */}
+                  <div className="mt-5 pt-3 border-t border-white/10">
+                    <div 
+                      className="flex items-center justify-between text-xs text-slate-300 font-medium group/link cursor-pointer hover:text-white transition-colors"
+                      title={customerObj?.phone || customerObj?.email || customerName}
+                    >
+                      <div className="flex items-center gap-1.5 truncate">
+                        <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span className="truncate">{customerName}</span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-slate-400 shrink-0 transition-transform group-hover/link:translate-x-0.5" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Panel: Clean Surface (Modeled after reference right section) */}
+                <div className="flex-1 p-5 md:p-6 flex flex-col justify-between gap-5 bg-card dark:bg-[#151a26]">
+                  {/* Top section: Chapter/Date subheader + Big Price + Progress Bar */}
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                        SALE DATE • {saleDateStr}
+                      </p>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <h2 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">
+                          ₦{salePrice.toLocaleString()}
+                        </h2>
+                        {paymentInfo.isDeposit ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-amber-500/15 text-amber-500 border border-amber-500/30">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                            Deposit
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">
+                            <CheckCircle className="w-3 h-3 text-emerald-500" />
+                            Paid in Full
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Progress Bar (Matching reference image: "6/9 Challenges" style) */}
+                    <div className="flex flex-col sm:items-end gap-1.5">
+                      <div className="w-36 sm:w-44 h-2 bg-muted/60 dark:bg-white/10 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full rounded-full transition-all duration-500 ${paymentInfo.isDeposit ? 'bg-amber-500' : 'bg-emerald-500 w-full'}`}
+                          style={paymentInfo.isDeposit ? { width: `${Math.max(8, percent)}%` } : undefined}
+                        />
+                      </div>
+                      <p className="text-[11px] font-semibold text-muted-foreground">
+                        {paymentInfo.isDeposit ? (
+                          paymentInfo.hasPayments && paymentInfo.totalPaid > 0 ? (
+                            <>₦{paymentInfo.totalPaid.toLocaleString()} / ₦{salePrice.toLocaleString()} <span className="font-extrabold text-amber-500">({percent}%)</span></>
+                          ) : (
+                            <span className="font-extrabold text-amber-500">Deposit / Part Payment</span>
+                          )
+                        ) : (
+                          <span className="font-bold text-emerald-500 flex items-center gap-1">
+                            <CheckCircle className="w-3 h-3 text-emerald-500" /> 100% Settled
+                          </span>
+                        )}
+                      </p>
+                      {paymentInfo.isDeposit && paymentInfo.balance > 0 && (
+                        <p className="text-[10px] font-mono text-amber-500/90 sm:text-right">
+                          Remaining Balance: ₦{paymentInfo.balance.toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Bottom section: Action Buttons (matching reference button pill style) */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-border/40 dark:border-white/5">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setQrId(s.id)}
+                        className="rounded-full px-4 h-9 border-border/60 hover:bg-muted font-semibold text-xs tracking-wide transition-all gap-1.5"
+                      >
+                        <QrCode className="w-3.5 h-3.5 text-muted-foreground" />
+                        Sign Link
+                      </Button>
+                      
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="rounded-full px-4 h-9 border-border/60 hover:bg-muted font-semibold text-xs tracking-wide transition-all gap-1.5"
+                          >
+                            <FileDown className="w-3.5 h-3.5 text-muted-foreground" />
+                            Download
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="rounded-2xl glass-panel p-2 shadow-2xl border-white/10">
+                          <DropdownMenuItem onClick={() => downloadSaleReceipt(s, "png")} className="rounded-xl cursor-pointer gap-2">
+                            <Image className="h-4 w-4 text-emerald-500" /> Save as PNG
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => downloadSaleReceipt(s, "jpeg")} className="rounded-xl cursor-pointer gap-2">
+                            <Image className="h-4 w-4 text-amber-500" /> Save as JPEG
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => downloadSaleReceipt(s, "pdf")} className="rounded-xl cursor-pointer gap-2">
+                            <FileDown className="h-4 w-4 text-emerald-500" /> Save as PDF
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+
+                      {hasEdit && (
+                        <div className="flex items-center gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => openEdit(s)} 
+                            className="rounded-full h-9 w-9 hover:bg-muted text-muted-foreground hover:text-foreground"
+                            title="Edit Sale"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => setDeleteId(s.id)} 
+                            className="rounded-full h-9 w-9 hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                            title="Delete Sale"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Action Pill Buttons (like Continue in reference image) */}
+                    <div className="flex items-center gap-2.5">
+                      <Button
+                        size="sm"
+                        onClick={() => setPaymentSaleId(s.id)}
+                        className={`rounded-full px-5 h-9 font-bold text-xs tracking-wide transition-all shadow-md active:scale-95 gap-1.5 ${
+                          paymentInfo.isDeposit 
+                            ? "bg-amber-500 hover:bg-amber-600 text-black shadow-amber-500/20" 
+                            : "bg-muted/80 hover:bg-muted text-foreground border border-border/40"
+                        }`}
+                      >
+                        <DollarSign className="w-3.5 h-3.5" />
+                        {paymentInfo.isDeposit ? "Record Payment" : "Payments"}
+                        {paymentInfo.isDeposit && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-black animate-ping ml-0.5" />
+                        )}
+                      </Button>
+
+                      {/* Primary Pill Button exactly like Continue in reference */}
+                      <Button
+                        size="sm"
+                        onClick={() => handlePrintReceipt(s)}
+                        className="rounded-full px-6 h-9 bg-[#181d2f] hover:bg-[#252c42] dark:bg-white dark:hover:bg-slate-200 text-white dark:text-slate-900 font-bold text-xs tracking-wide shadow-lg shadow-black/20 hover:shadow-xl transition-all active:scale-95 gap-2"
+                      >
+                        <Receipt className="w-3.5 h-3.5" />
+                        Receipt
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ) : (
+        /* Dense Table View */
         <div className="bento-card overflow-hidden border-none shadow-2xl">
-          <div className="hidden md:block table-container">
+          <div className="table-container">
             <Table>
               <TableHeader className="bg-foreground/5 pointer-events-none">
                 <TableRow className="border-border/50 hover:bg-transparent">
                   <TableHead className="font-semibold px-6 py-4">Vehicle</TableHead>
                   <TableHead className="font-semibold">Customer</TableHead>
                   <TableHead className="font-semibold">Sale Price</TableHead>
+                  <TableHead className="font-semibold">Status</TableHead>
                   <TableHead className="font-semibold">Sale Date</TableHead>
                   <TableHead className="text-right font-semibold px-6">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="py-12 text-center text-muted-foreground">
-                      <div className="flex flex-col items-center justify-center space-y-2">
-                        <Search className="h-8 w-8 opacity-20" />
-                        <p className="font-medium">No sales match your current filters.</p>
-                        <Button variant="link" onClick={() => { setSearch(""); setSelectedMonth("all"); setSelectedWeek("all"); setSourceCompanyFilter("all"); setPaymentStatusFilter("all"); }} className="text-violet-500">
-                          Clear all filters
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : paged.map((s) => (
-                  <TableRow key={s.id} className="border-border/10 hover:bg-white/5 transition-colors group">
-                    <TableCell className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <Car className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-semibold text-sm transition-colors group-hover:text-violet-500">{vehicleMap[s.vehicle_id] || "—"}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">{customerMap[s.customer_id] || "—"}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-semibold">₦{Number(s.sale_price).toLocaleString()}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm flex items-center gap-2"><Calendar className="h-3.5 w-3.5" /> {new Date(s.sale_date).toLocaleDateString()}</TableCell>
-                    <TableCell className="text-right px-6">
-                      <div className="flex justify-end gap-1 opacity-50 group-hover:opacity-100 transition-opacity">
-                        <Button variant="ghost" size="sm" className="h-8 rounded-lg hover:bg-foreground/20 text-amber-500" onClick={() => setQrId(s.id)}>
-                          <QrCode className="h-4 w-4 mr-1.5" /> Sign Link
-                        </Button>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 rounded-lg hover:bg-foreground/20 text-sky-500">
-                              <FileDown className="h-4 w-4 mr-1.5" /> Download
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent className="rounded-xl glass-panel p-2 shadow-2xl border-white/10" align="end">
-                            <DropdownMenuItem onClick={() => downloadSaleReceipt(s, "png")} className="rounded-lg cursor-pointer gap-2">
-                              <Image className="h-4 w-4 text-emerald-500" /> Save as PNG
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => downloadSaleReceipt(s, "jpeg")} className="rounded-lg cursor-pointer gap-2">
-                              <Image className="h-4 w-4 text-amber-500" /> Save as JPEG
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => downloadSaleReceipt(s, "pdf")} className="rounded-lg cursor-pointer gap-2">
-                              <FileDown className="h-4 w-4 text-violet-500" /> Save as PDF
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 rounded-lg hover:bg-foreground/20 text-emerald-500">
-                              <Receipt className="h-4 w-4 mr-1.5" /> Receipt
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent className="rounded-xl glass-panel p-2 shadow-2xl border-white/10" align="end">
-                            <DropdownMenuItem onClick={() => handlePrintReceipt(s)} className="rounded-lg cursor-pointer gap-2">
-                              <Printer className="h-4 w-4 text-emerald-500" /> Print Receipt
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => downloadSaleReceipt(s, "pdf", true)} className="rounded-lg cursor-pointer gap-2">
-                              <Mail className="h-4 w-4 text-indigo-500" /> Email to Customer
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                        <Button variant="ghost" size="sm" className="h-8 rounded-lg hover:bg-emerald-500/10 hover:text-emerald-500" onClick={() => setPaymentSaleId(s.id)}>
-                          <DollarSign className="h-4 w-4 mr-1.5" /> Payments
-                        </Button>
-                        {hasEdit && (
-                          <>
-                            <Button variant="ghost" size="icon" onClick={() => openEdit(s)} className="h-8 w-8 rounded-lg hover:bg-foreground/20">
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => setDeleteId(s.id)} className="h-8 w-8 rounded-lg hover:bg-destructive/20 hover:text-destructive">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </>
+                {paged.map((s) => {
+                  const paymentInfo = getSalePaymentInfo(s);
+                  return (
+                    <TableRow key={s.id} className={`border-border/10 hover:bg-white/5 transition-colors group ${paymentInfo.isDeposit ? 'bg-amber-500/[0.02]' : ''}`}>
+                      <TableCell className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <Car className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-semibold text-sm transition-colors group-hover:text-foreground">{vehicleMap[s.vehicle_id] || "—"}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Users className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">{customerMap[s.customer_id] || "—"}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-semibold">₦{Number(s.sale_price).toLocaleString()}</TableCell>
+                      <TableCell>
+                        {paymentInfo.isDeposit ? (
+                          <div className="flex flex-col gap-1 items-start">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-amber-500/15 text-amber-400 border border-amber-500/30 shadow-sm shadow-amber-500/10">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                              Deposit
+                            </span>
+                            {paymentInfo.hasPayments && paymentInfo.totalPaid > 0 && (
+                              <span className="text-[10px] text-muted-foreground font-mono">
+                                Paid: ₦{paymentInfo.totalPaid.toLocaleString()} • Bal: ₦{paymentInfo.balance.toLocaleString()}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                            <CheckCircle className="w-3 h-3 text-emerald-400" />
+                            Paid in Full
+                          </span>
                         )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm flex items-center gap-2"><Calendar className="h-3.5 w-3.5" /> {new Date(s.sale_date).toLocaleDateString()}</TableCell>
+                      <TableCell className="text-right px-6">
+                        <div className="flex justify-end gap-1 opacity-50 group-hover:opacity-100 transition-opacity">
+                          <Button variant="ghost" size="sm" className="h-8 rounded-lg hover:bg-foreground/20 text-amber-500" onClick={() => setQrId(s.id)}>
+                            <QrCode className="h-4 w-4 mr-1.5" /> Sign Link
+                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 rounded-lg hover:bg-foreground/20 text-sky-500">
+                                <FileDown className="h-4 w-4 mr-1.5" /> Download
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className="rounded-xl glass-panel p-2 shadow-2xl border-white/10" align="end">
+                              <DropdownMenuItem onClick={() => downloadSaleReceipt(s, "png")} className="rounded-lg cursor-pointer gap-2">
+                                <Image className="h-4 w-4 text-emerald-500" /> Save as PNG
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => downloadSaleReceipt(s, "jpeg")} className="rounded-lg cursor-pointer gap-2">
+                                <Image className="h-4 w-4 text-amber-500" /> Save as JPEG
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => downloadSaleReceipt(s, "pdf")} className="rounded-lg cursor-pointer gap-2">
+                                <FileDown className="h-4 w-4 text-emerald-500" /> Save as PDF
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          <Button 
+                            size="sm" 
+                            className="rounded-full px-4 h-8 bg-[#181d2f] hover:bg-[#252c42] dark:bg-white dark:hover:bg-slate-200 text-white dark:text-slate-900 font-bold text-xs shadow-sm"
+                            onClick={() => handlePrintReceipt(s)}
+                          >
+                            <Receipt className="h-3.5 w-3.5 mr-1" /> Receipt
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className={`h-8 rounded-lg ${
+                              paymentInfo.isDeposit 
+                                ? "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20 font-medium" 
+                                : "hover:bg-emerald-500/10 hover:text-emerald-500"
+                            }`} 
+                            onClick={() => setPaymentSaleId(s.id)}
+                            title={paymentInfo.isDeposit ? "Manage Deposit Payments" : "Payments"}
+                          >
+                            <DollarSign className="h-4 w-4 mr-1.5" /> Payments
+                            {paymentInfo.isDeposit && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping ml-0.5" />
+                            )}
+                          </Button>
+                          {hasEdit && (
+                            <>
+                              <Button variant="ghost" size="icon" onClick={() => openEdit(s)} className="h-8 w-8 rounded-lg hover:bg-foreground/20">
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" onClick={() => setDeleteId(s.id)} className="h-8 w-8 rounded-lg hover:bg-destructive/20 hover:text-destructive">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
+        </div>
+      )}
 
-          {/* Mobile Card View */}
-          <div className="md:hidden divide-y divide-white/5">
-            {filtered.length === 0 ? (
-              <div className="p-12 text-center text-muted-foreground">
-                <Search className="h-8 w-8 opacity-20 mx-auto mb-2" />
-                <p className="font-medium">No sales match your current filters.</p>
-                <Button variant="link" onClick={() => { setSearch(""); setSelectedMonth("all"); setSelectedWeek("all"); setSourceCompanyFilter("all"); setPaymentStatusFilter("all"); }} className="text-violet-500">
-                  Clear all filters
-                </Button>
-              </div>
-            ) : paged.map((s) => (
-              <div key={s.id} className="p-4 space-y-4">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-bold text-sm tracking-tight">{vehicleMap[s.vehicle_id] || "—"}</p>
-                    <p className="text-[10px] text-violet-500 font-bold mt-0.5 uppercase tracking-widest">{customerMap[s.customer_id] || "—"}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-sm text-foreground">₦{Number(s.sale_price).toLocaleString()}</p>
-                    <p className="text-[10px] text-muted-foreground">{new Date(s.sale_date).toLocaleDateString()}</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center justify-between pt-1">
-                  <div className="flex gap-1.5 items-center">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setQrId(s.id)}
-                      className="h-8 rounded-lg text-[11px] font-bold border-white/10"
-                    >
-                      <QrCode className="w-3.5 h-3.5 mr-1" /> Sign
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 rounded-lg hover:bg-violet-500/10 text-violet-500">
-                          <FileDown className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="glass-panel border-white/10 rounded-xl p-1">
-                        <DropdownMenuItem onClick={() => downloadSaleReceipt(s, "pdf")} className="rounded-lg cursor-pointer gap-2 text-xs">
-                          <FileDown className="h-4 w-4 text-violet-500" /> PDF
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handlePrintReceipt(s)} className="rounded-lg cursor-pointer gap-2 text-xs">
-                          <Printer className="h-4 w-4 text-emerald-500" /> Print
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setPaymentSaleId(s.id)}
-                      className="h-8 rounded-lg hover:bg-emerald-500/10 hover:text-emerald-500"
-                    >
-                      <DollarSign className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                  
-                  <div className="flex gap-1">
-                    {hasEdit && (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEdit(s)}
-                          className="h-8 rounded-lg hover:bg-violet-500/10 hover:text-violet-500"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setDeleteId(s.id)}
-                          className="h-8 rounded-lg hover:bg-destructive/10 hover:text-destructive text-muted-foreground"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="p-6 border-t border-border/10">
-              <Pagination>
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious 
-                      onClick={() => page > 0 && setPage(page - 1)}
-                      className={page === 0 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                    />
-                  </PaginationItem>
-                  
-                  {[...Array(totalPages)].map((_, i) => (
-                    <PaginationItem key={i} className="hidden sm:block">
-                      <PaginationLink 
-                        isActive={page === i}
-                        onClick={() => setPage(i)}
-                        className="cursor-pointer"
-                      >
-                        {i + 1}
-                      </PaginationLink>
-                    </PaginationItem>
-                  ))}
-
-                  <PaginationItem>
-                    <PaginationNext 
-                      onClick={() => page < totalPages - 1 && setPage(page + 1)}
-                      className={page >= totalPages - 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                    />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
-              <div className="text-center mt-4 text-xs text-muted-foreground sm:hidden">
-                Page {page + 1} of {totalPages}
-              </div>
-            </div>
-          )}
+      {/* Reference-Styled Pagination Component */}
+      {filtered.length > 0 && (
+        <div className="pt-2">
+          <CustomPagination
+            currentPage={page}
+            totalPages={totalPages}
+            totalItems={filtered.length}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            pageSizeOptions={[5, 8, 15, 25, 50]}
+            itemLabel="sales"
+          />
         </div>
       )}
     </div>
@@ -1392,7 +1612,7 @@ export default function Sales() {
             </Button>
             <DialogHeader className="text-left">
               <DialogTitle className="text-xl font-bold flex items-center gap-2">
-                <Receipt className="w-5 h-5 text-violet-500" />
+                <Receipt className="w-5 h-5 text-emerald-500" />
                 {editId ? "Edit Sale Details" : "Record New Sale"}
               </DialogTitle>
             </DialogHeader>
@@ -1405,7 +1625,7 @@ export default function Sales() {
                   type="button" 
                   variant="ghost" 
                   size="sm" 
-                  className="h-7 text-[10px] font-bold uppercase text-violet-500 hover:text-violet-600 hover:bg-violet-500/5"
+                  className="h-7 text-[10px] font-bold uppercase text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/5"
                   onClick={() => setForm({ 
                     ...form, 
                     is_new_customer: !form.is_new_customer,
@@ -1424,7 +1644,7 @@ export default function Sales() {
                   onAddNew={() => setForm({ ...form, is_new_customer: true, customer_id: "" })}
                 />
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 rounded-2xl bg-violet-500/5 border border-violet-500/10 animate-fade-down">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 animate-fade-down">
                   <div className="sm:col-span-2 space-y-1.5">
                     <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Full Name *</Label>
                     <Input 
@@ -1489,7 +1709,7 @@ export default function Sales() {
                       key={v.id} 
                       className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
                         form.selected_vehicle_ids.includes(v.id) 
-                          ? 'bg-violet-500/10 border-violet-500/20 text-violet-500' 
+                          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' 
                           : 'bg-background/40 border-white/5 hover:bg-white/5'
                       }`}
                       onClick={() => {
@@ -1499,7 +1719,7 @@ export default function Sales() {
                         setForm({ ...form, selected_vehicle_ids: ids });
                       }}
                     >
-                      <Checkbox checked={form.selected_vehicle_ids.includes(v.id)} className="data-[state=checked]:bg-violet-500 pointer-events-none" />
+                      <Checkbox checked={form.selected_vehicle_ids.includes(v.id)} className="data-[state=checked]:bg-emerald-500 pointer-events-none" />
                       <div className="flex flex-col leading-tight">
                         <span className="text-[13px] font-medium">{v.year} {v.make} {v.model}</span>
                         {v.vin && <span className="text-[10px] text-muted-foreground font-mono">VIN: {v.vin}</span>}
@@ -1516,11 +1736,11 @@ export default function Sales() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Sale Price *</Label>
-                <CurrencyInput className="rounded-xl h-11 bg-background/50 border-white/10 focus-visible:ring-violet-500 font-bold" placeholder="0" value={form.sale_price} onChange={(e) => setForm({ ...form, sale_price: e.target.value })} />
+                <CurrencyInput className="rounded-xl h-11 bg-background/50 border-white/10 focus-visible:ring-emerald-500 font-bold" placeholder="0" value={form.sale_price} onChange={(e) => setForm({ ...form, sale_price: e.target.value })} />
               </div>
               <div className="space-y-2">
                 <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sale Date *</Label>
-                <Input className="rounded-xl h-11 bg-background/50 border-white/10 focus-visible:ring-violet-500" type="date" value={form.sale_date} onChange={(e) => setForm({ ...form, sale_date: e.target.value })} />
+                <Input className="rounded-xl h-11 bg-background/50 border-white/10 focus-visible:ring-emerald-500" type="date" value={form.sale_date} onChange={(e) => setForm({ ...form, sale_date: e.target.value })} />
               </div>
             </div>
 
@@ -1594,12 +1814,12 @@ export default function Sales() {
 
             <div className="space-y-2 pt-2 border-t border-white/5">
               <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Notes</Label>
-              <Textarea className="rounded-xl min-h-[80px] bg-background/50 border-white/10 focus-visible:ring-violet-500" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Additional remarks regarding the sale..." />
+              <Textarea className="rounded-xl min-h-[80px] bg-background/50 border-white/10 focus-visible:ring-emerald-500" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Additional remarks regarding the sale..." />
             </div>
           </div>
           <div className="p-6 border-t border-white/5 bg-foreground/5 flex justify-end gap-3">
-            <Button variant="outline" onClick={closeDialog} className="rounded-xl border-white/10 hover:bg-white/5">Cancel</Button>
-            <Button onClick={() => upsertMutation.mutate(undefined)} disabled={!canSubmit} className="rounded-xl bg-violet-500 hover:bg-violet-600 text-white border-0 shadow-lg shadow-violet-500/20">
+            <Button variant="outline" onClick={closeDialog} className="rounded-full px-5 border-white/10 hover:bg-white/5">Cancel</Button>
+            <Button onClick={() => upsertMutation.mutate(undefined)} disabled={!canSubmit} className="rounded-full px-6 py-2.5 bg-[#181d2f] hover:bg-[#252c42] dark:bg-white dark:hover:bg-slate-200 text-white dark:text-slate-900 font-bold text-xs shadow-lg transition-all active:scale-95">
               {editId ? "Update Sale" : "Record Sale"}
             </Button>
           </div>

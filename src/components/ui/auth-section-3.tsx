@@ -46,7 +46,7 @@ export default function AuthSectionThree({ onSuccess }: AuthSectionThreeProps) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         await logAction("LOGIN", "Auth", null, { method: "email" });
-        toast.success("Welcome back to Lamido Cars!");
+        toast.success("Welcome back to Abuja Best Car!");
         if (onSuccess) onSuccess();
       } else {
         const fullName = `${firstName} ${lastName}`.trim() || email.split("@")[0];
@@ -77,10 +77,10 @@ export default function AuthSectionThree({ onSuccess }: AuthSectionThreeProps) {
           <div className="mx-auto w-full max-w-[460px]">
             {/* Header / Logo */}
             <div className="flex items-center gap-3 mb-6">
-              <img src={logo} alt="Lamido Cars" className="h-9 w-9 rounded-xl object-contain" />
+              <img src={logo} alt="Abuja Best Car" className="h-9 w-9 rounded-xl object-contain" />
               <div>
                 <span className="text-xs font-bold uppercase tracking-[0.2em] text-white/90">
-                  Lamido Cars
+                  Abuja Best Car
                 </span>
                 <p className="text-[10px] text-white/40 uppercase font-semibold tracking-wider">
                   CRM Dealership Platform
@@ -159,7 +159,7 @@ export default function AuthSectionThree({ onSuccess }: AuthSectionThreeProps) {
                 label="Email address"
                 value={email}
                 onChange={setEmail}
-                placeholder="admin@lamidocars.com"
+                placeholder="admin@abujabestcar.com"
                 type="email"
               />
 
@@ -249,12 +249,12 @@ export default function AuthSectionThree({ onSuccess }: AuthSectionThreeProps) {
               >
                 <img
                   src={logo}
-                  alt="Lamido Cars"
-                  className="size-11 shrink-0 rounded-2xl border border-white/20 object-contain p-1 bg-white/5"
+                  alt="Abuja Best Cars"
+                  className="size-12 shrink-0 rounded-full border border-white/20 object-cover bg-black"
                 />
                 <div>
                   <div className="font-semibold leading-tight text-white">
-                    Lamido Autos
+                    Abuja Best Cars
                   </div>
                   <div className="mt-0.5 text-xs text-white/60">
                     Dealership Management System
@@ -297,7 +297,7 @@ export default function AuthSectionThree({ onSuccess }: AuthSectionThreeProps) {
                     <div className="size-2.5 rounded-full bg-emerald-500/80" />
                   </div>
                   <span className="text-[10px] font-mono tracking-wider text-white/40 uppercase font-bold">
-                    Lamido Dealership Portal
+                    Abuja Best Car Dealership Portal
                   </span>
                 </div>
                 <div className="grid grid-cols-3 gap-2">

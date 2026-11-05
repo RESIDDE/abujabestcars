@@ -24,7 +24,7 @@ export function PrintFooter({ customerSignature, companySignature, showSignature
             </div>
           </div>
           <div className="text-left">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-800 mb-1.5">LAMIDO CARS LTD. SIGN</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-800 mb-1.5">ABUJA BEST CARS SIGN</p>
             <div className="w-[160px] h-[36px] border border-gray-400 bg-white flex items-center justify-center overflow-hidden">
               {companySignature ? (
                 <img src={companySignature} alt="Company Signature" className="max-h-[34px] max-w-[150px] object-contain" />
@@ -71,7 +71,7 @@ export function getPrintFooterHTML(customerSignature?: string, companySignature?
           </div>
         </div>
         <div style="text-align: left;">
-          <p style="font-family: Arial, sans-serif; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #222; margin: 0 0 5px 0;">LAMIDO CARS LTD. SIGN</p>
+          <p style="font-family: Arial, sans-serif; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #222; margin: 0 0 5px 0;">ABUJA BEST CARS SIGN</p>
           <div style="width: 155px; height: 34px; border: 1px solid #777; background: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden;">
             ${compSigHTML}
           </div>
