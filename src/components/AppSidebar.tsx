@@ -75,10 +75,11 @@ export function AppSidebar() {
     navigate("/auth");
   };
 
+  // import() returns a promise, so a sync try/catch never sees a failed
+  // prefetch — an unhandled rejection would surface as a blank page later.
+  // Swallow it here and let the route's own retrying loader handle the click.
   const handlePrefetch = (url: string) => {
-    try {
-      PREFETCH_MAP[url]?.();
-    } catch (e) {}
+    PREFETCH_MAP[url]?.().catch(() => {});
   };
 
   return (

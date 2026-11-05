@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -10,29 +10,68 @@ import { PermissionsRealtimeSync } from "@/hooks/usePermissions";
 import { ThemeProvider } from "next-themes";
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+
+/**
+ * React.lazy with one retry, then a single forced reload.
+ *
+ * A dynamic import can fail on a network blip, or because the tab is running
+ * an older deploy whose chunk filenames no longer exist on the server. Without
+ * this the Suspense boundary never resolves and the page stays blank until the
+ * user refreshes by hand. The sessionStorage flag stops a reload loop when the
+ * chunk is genuinely missing — the ErrorBoundary then shows a message instead.
+ */
+const CHUNK_RELOAD_KEY = "chunk-reload";
+
+function lazyWithRetry<T extends React.ComponentType<any>>(factory: () => Promise<{ default: T }>) {
+  return lazy(async () => {
+    try {
+      const mod = await factory();
+      // Loaded fine, so the tab is on the current deploy — allow a future reload.
+      sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+      return mod;
+    } catch {
+      await new Promise((r) => setTimeout(r, 400));
+      try {
+        const mod = await factory();
+        sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+        return mod;
+      } catch (err) {
+        // Reload at most once per session, otherwise a genuinely missing chunk
+        // would reload forever. After that the ErrorBoundary takes over.
+        if (!sessionStorage.getItem(CHUNK_RELOAD_KEY)) {
+          sessionStorage.setItem(CHUNK_RELOAD_KEY, "1");
+          window.location.reload();
+          return await new Promise<{ default: T }>(() => {});
+        }
+        throw err;
+      }
+    }
+  });
+}
 
 // Lazy load pages
-const Index = lazy(() => import("./pages/Index"));
-const Auth = lazy(() => import("./pages/Auth"));
-const Settings = lazy(() => import("./pages/Settings"));
-const Unauthorized = lazy(() => import("./pages/Unauthorized"));
-const VehiclesList = lazy(() => import("./pages/VehiclesList"));
-const VehicleForm = lazy(() => import("./pages/VehicleForm"));
-const VehicleDetail = lazy(() => import("./pages/VehicleDetail"));
-const Customers = lazy(() => import("./pages/Customers"));
-const Sales = lazy(() => import("./pages/Sales"));
-const Inquiries = lazy(() => import("./pages/Inquiries"));
-const AuthorityToSell = lazy(() => import("./pages/AuthorityToSell"));
-const SalesAgreement = lazy(() => import("./pages/SalesAgreement"));
-const PerformanceQuotes = lazy(() => import("./pages/PerformanceQuotes"));
-const Expenses = lazy(() => import("./pages/Expenses"));
-const AdvancedReport = lazy(() => import("./pages/AdvancedReport"));
-const SignCustomer = lazy(() => import("./pages/SignCustomer"));
-const SignSale = lazy(() => import("./pages/SignSale"));
-const NotFound = lazy(() => import("./pages/NotFound"));
-const CustomerPortal = lazy(() => import("./pages/CustomerPortal"));
-const SourceCompanyDetails = lazy(() => import("./pages/SourceCompanyDetails"));
-const Profile = lazy(() => import("./pages/Profile"));
+const Index = lazyWithRetry(() => import("./pages/Index"));
+const Auth = lazyWithRetry(() => import("./pages/Auth"));
+const Settings = lazyWithRetry(() => import("./pages/Settings"));
+const Unauthorized = lazyWithRetry(() => import("./pages/Unauthorized"));
+const VehiclesList = lazyWithRetry(() => import("./pages/VehiclesList"));
+const VehicleForm = lazyWithRetry(() => import("./pages/VehicleForm"));
+const VehicleDetail = lazyWithRetry(() => import("./pages/VehicleDetail"));
+const Customers = lazyWithRetry(() => import("./pages/Customers"));
+const Sales = lazyWithRetry(() => import("./pages/Sales"));
+const Inquiries = lazyWithRetry(() => import("./pages/Inquiries"));
+const AuthorityToSell = lazyWithRetry(() => import("./pages/AuthorityToSell"));
+const SalesAgreement = lazyWithRetry(() => import("./pages/SalesAgreement"));
+const PerformanceQuotes = lazyWithRetry(() => import("./pages/PerformanceQuotes"));
+const Expenses = lazyWithRetry(() => import("./pages/Expenses"));
+const AdvancedReport = lazyWithRetry(() => import("./pages/AdvancedReport"));
+const SignCustomer = lazyWithRetry(() => import("./pages/SignCustomer"));
+const SignSale = lazyWithRetry(() => import("./pages/SignSale"));
+const NotFound = lazyWithRetry(() => import("./pages/NotFound"));
+const CustomerPortal = lazyWithRetry(() => import("./pages/CustomerPortal"));
+const SourceCompanyDetails = lazyWithRetry(() => import("./pages/SourceCompanyDetails"));
+const Profile = lazyWithRetry(() => import("./pages/Profile"));
 
 const PageLoader = () => (
   <div className="h-[60vh] w-full flex items-center justify-center">
@@ -73,6 +112,12 @@ function GuestGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/** Resets the boundary on navigation so one broken page doesn't stick. */
+function RouteErrorBoundary({ children }: { children: React.ReactNode }) {
+  const { pathname } = useLocation();
+  return <ErrorBoundary resetKey={pathname}>{children}</ErrorBoundary>;
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -89,7 +134,8 @@ function AppRoutes() {
       <Route path="/*" element={
         <AuthGuard>
           <AppLayout>
-            <Suspense fallback={<PageLoader />}>
+            <RouteErrorBoundary>
+              <Suspense fallback={<PageLoader />}>
               <Routes>
                 <Route path="/dashboard"         element={<Index />} />
                 <Route path="/profile"           element={<Profile />} />
@@ -111,7 +157,8 @@ function AppRoutes() {
                 <Route path="/unauthorized"      element={<Unauthorized />} />
                 <Route path="*"                  element={<NotFound />} />
               </Routes>
-            </Suspense>
+              </Suspense>
+            </RouteErrorBoundary>
           </AppLayout>
         </AuthGuard>
       } />
@@ -128,7 +175,13 @@ const App = () => (
         <BrowserRouter>
           {/* Single global Realtime listener — must be inside QueryClientProvider */}
           <PermissionsRealtimeSync />
-          <AppRoutes />
+          {/* Outer boundary also covers the public routes (/auth, /portal, /sign/*),
+              which render lazy pages outside the in-layout Suspense below. */}
+          <RouteErrorBoundary>
+            <Suspense fallback={<PageLoader />}>
+              <AppRoutes />
+            </Suspense>
+          </RouteErrorBoundary>
         </BrowserRouter>
       </TooltipProvider>
     </ThemeProvider>
