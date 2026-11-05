@@ -24,26 +24,31 @@ async function fetchPermissions(): Promise<PermissionsMap> {
 
   const fetched = data.value as Partial<PermissionsMap>;
 
-  // Migrate legacy role data: if a role has no `create` field, backfill it
-  // from `edit` so existing "Full Access" users retain their Add rights.
-  // If `edit` is also missing, default to empty so View-only stays view-only.
+  // Migrate legacy role data:
+  // - no `create` field: backfill from `edit` so existing "Full Access" users
+  //   retain their Add rights. If `edit` is also missing, default to empty so
+  //   View-only stays view-only.
+  // - no `delete` field: backfill from `edit`, because delete used to be gated
+  //   by the edit permission. This keeps saved roles behaving exactly as before
+  //   the split; an admin can now untick Delete on its own.
   function migrateRole(
-    role: { view?: any[]; create?: any[]; edit?: any[] } | undefined,
-    defaults: { view: any[]; create: any[]; edit: any[] }
+    role: { view?: any[]; create?: any[]; edit?: any[]; delete?: any[] } | undefined,
+    defaults: { view: any[]; create: any[]; edit: any[]; delete: any[] }
   ) {
     if (!role) return defaults;
     return {
       view: role.view ?? defaults.view,
       create: role.create ?? role.edit ?? [],   // backfill from edit if missing
       edit: role.edit ?? defaults.edit,
+      delete: role.delete ?? role.edit ?? [],   // delete used to come with edit
     };
   }
 
-  const result: Record<string, { view: any[]; create: any[]; edit: any[] }> = {};
+  const result: Record<string, { view: any[]; create: any[]; edit: any[]; delete: any[] }> = {};
 
   // First copy all fetched roles migrated
   for (const [key, roleVal] of Object.entries(fetched)) {
-    const defaultVal = (DEFAULT_PERMISSIONS as any)[key] ?? { view: [], create: [], edit: [] };
+    const defaultVal = (DEFAULT_PERMISSIONS as any)[key] ?? { view: [], create: [], edit: [], delete: [] };
     result[key] = migrateRole(roleVal as any, defaultVal);
   }
 

@@ -19,7 +19,7 @@ import { PrintHeader, PrintWatermark } from "@/components/PrintHeader";
 import { PrintFooter } from "@/components/PrintFooter";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
-import { canEdit, canCreate } from "@/lib/permissions";
+import { canEdit, canCreate, canDelete } from "@/lib/permissions";
 import { logAction } from "@/lib/logger";
 import { format, subMonths } from "date-fns";
 
@@ -69,6 +69,7 @@ export default function AuthorityToSell() {
   const { user, role } = useAuth();
   const { permissions } = usePermissions();
   const hasEdit = canEdit(role, "authority-to-sell", permissions);
+  const hasDelete = canDelete(role, "authority-to-sell", permissions);
   const canAdd = canCreate(role, "authority-to-sell", permissions);
 
   const [activeTab, setActiveTab] = useState(canAdd ? "create" : "history");
@@ -869,26 +870,30 @@ export default function AuthorityToSell() {
                         {/* Bottom Action Pill Buttons matching reference */}
                         <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-border/40 dark:border-white/5">
                           <div className="flex items-center gap-2">
-                            {hasEdit && (
+                            {(hasEdit || hasDelete) && (
                               <div className="flex items-center gap-1">
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  onClick={() => handleEdit(item)} 
-                                  className="rounded-full h-9 w-9 hover:bg-muted text-muted-foreground hover:text-foreground"
-                                  title="Edit Agreement"
-                                >
-                                  <Pencil className="w-3.5 h-3.5" />
-                                </Button>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon" 
-                                  onClick={() => deleteMutation.mutate(item.id)} 
-                                  className="rounded-full h-9 w-9 hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-                                  title="Delete Agreement"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </Button>
+                                {hasEdit && (
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    onClick={() => handleEdit(item)} 
+                                    className="rounded-full h-9 w-9 hover:bg-muted text-muted-foreground hover:text-foreground"
+                                    title="Edit Agreement"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
+                                {hasDelete && (
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    onClick={() => deleteMutation.mutate(item.id)} 
+                                    className="rounded-full h-9 w-9 hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                                    title="Delete Agreement"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
                               </div>
                             )}
                           </div>
@@ -948,24 +953,24 @@ export default function AuthorityToSell() {
                                 <Printer className="w-3.5 h-3.5 mr-1.5" /> View
                               </Button>
                               {hasEdit && (
-                                <>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => handleEdit(item)}
-                                    className="h-8 w-8 rounded-lg hover:bg-foreground/20"
-                                  >
-                                    <Pencil className="w-3.5 h-3.5" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => deleteMutation.mutate(item.id)}
-                                    className="h-8 w-8 rounded-lg hover:bg-destructive/20 hover:text-destructive"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </Button>
-                                </>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEdit(item)}
+                                  className="h-8 w-8 rounded-lg hover:bg-foreground/20"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </Button>
+                              )}
+                              {hasDelete && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => deleteMutation.mutate(item.id)}
+                                  className="h-8 w-8 rounded-lg hover:bg-destructive/20 hover:text-destructive"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
                               )}
                             </div>
                           </TableCell>

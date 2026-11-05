@@ -27,7 +27,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
-import { canEdit, canCreate } from "@/lib/permissions";
+import { canEdit, canCreate, canDelete } from "@/lib/permissions";
 import { logAction } from "@/lib/logger";
 import { CustomerSelect } from "@/components/CustomerSelect";
 import { format, subMonths } from "date-fns";
@@ -66,6 +66,7 @@ export default function Inquiries() {
   const { role } = useAuth();
   const { permissions } = usePermissions();
   const hasEdit = canEdit(role, "inquiries", permissions);
+  const hasDelete = canDelete(role, "inquiries", permissions);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewId, setViewId] = useState<string | null>(null);
@@ -461,14 +462,14 @@ export default function Inquiries() {
                             <Eye className="h-4 w-4" />
                           </Button>
                           {hasEdit && (
-                            <>
-                              <Button variant="ghost" size="icon" onClick={() => openEdit(i)} className="h-8 w-8 rounded-lg hover:bg-foreground/20">
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" onClick={() => setDeleteId(i.id)} className="h-8 w-8 rounded-lg hover:bg-destructive/20 hover:text-destructive">
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </>
+                            <Button variant="ghost" size="icon" onClick={() => openEdit(i)} className="h-8 w-8 rounded-lg hover:bg-foreground/20">
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {hasDelete && (
+                            <Button variant="ghost" size="icon" onClick={() => setDeleteId(i.id)} className="h-8 w-8 rounded-lg hover:bg-destructive/20 hover:text-destructive">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           )}
                         </div>
                       </TableCell>
@@ -505,14 +506,14 @@ export default function Inquiries() {
                         <Eye className="h-3.5 w-3.5" />
                       </Button>
                       {hasEdit && (
-                        <>
-                          <Button variant="ghost" size="sm" onClick={() => openEdit(i)} className="h-8 rounded-lg hover:bg-foreground/20">
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => setDeleteId(i.id)} className="h-8 rounded-lg hover:bg-destructive/20 hover:text-destructive">
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </>
+                        <Button variant="ghost" size="sm" onClick={() => openEdit(i)} className="h-8 rounded-lg hover:bg-foreground/20">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      {hasDelete && (
+                        <Button variant="ghost" size="sm" onClick={() => setDeleteId(i.id)} className="h-8 rounded-lg hover:bg-destructive/20 hover:text-destructive">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                       )}
                     </div>
                   </div>

@@ -20,7 +20,7 @@ import { PlusCircle, Pencil, Trash2, Users, QrCode, Phone, Mail, MapPin, Search,
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
-import { canEdit, canCreate } from "@/lib/permissions";
+import { canEdit, canCreate, canDelete } from "@/lib/permissions";
 import { logAction } from "@/lib/logger";
 
 type Customer = {
@@ -38,6 +38,7 @@ export default function Customers() {
   const { role } = useAuth();
   const { permissions } = usePermissions();
   const hasEdit = canEdit(role, "customers", permissions);
+  const hasDelete = canDelete(role, "customers", permissions);
 
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
@@ -207,14 +208,14 @@ export default function Customers() {
   
                   <div className="flex gap-2 mt-6 pt-4 border-t border-white/5 justify-end">
                     {hasEdit && (
-                      <>
-                        <Button variant="ghost" size="sm" className="h-8 rounded-lg hover:bg-foreground/10 hover:text-foreground text-muted-foreground transition-all" onClick={() => openEdit(c)}>
-                          <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all" onClick={() => setDeleteId(c.id)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </>
+                      <Button variant="ghost" size="sm" className="h-8 rounded-lg hover:bg-foreground/10 hover:text-foreground text-muted-foreground transition-all" onClick={() => openEdit(c)}>
+                        <Pencil className="h-3.5 w-3.5 mr-1.5" /> Edit
+                      </Button>
+                    )}
+                    {hasDelete && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all" onClick={() => setDeleteId(c.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                     )}
                   </div>
                 </div>

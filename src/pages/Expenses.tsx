@@ -43,7 +43,7 @@ import { toast } from "sonner";
 import { exportToExcel, exportToJSON, printTable, exportToCSV, exportToPDF } from "@/lib/exportHelpers";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
-import { canEdit, canCreate } from "@/lib/permissions";
+import { canEdit, canCreate, canDelete } from "@/lib/permissions";
 import { logAction } from "@/lib/logger";
 import { CurrencyInput } from "@/components/CurrencyInput";
 
@@ -114,6 +114,7 @@ export default function Expenses() {
   const { role, user } = useAuth();
   const { permissions } = usePermissions();
   const hasEdit = canEdit(role, "expenses", permissions);
+  const hasDelete = canDelete(role, "expenses", permissions);
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");
@@ -791,14 +792,14 @@ export default function Expenses() {
                     <TableCell className="text-right px-6">
                       <div className="flex justify-end gap-1 opacity-50 group-hover:opacity-100 transition-opacity">
                         {hasEdit && (
-                          <>
-                            <Button variant="ghost" size="icon" onClick={() => openEditDialog(e)} className="h-8 w-8 rounded-lg hover:bg-foreground/20">
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => setDeleteId(e.id)} className="h-8 w-8 rounded-lg hover:bg-destructive/20 hover:text-destructive">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </>
+                          <Button variant="ghost" size="icon" onClick={() => openEditDialog(e)} className="h-8 w-8 rounded-lg hover:bg-foreground/20">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {hasDelete && (
+                          <Button variant="ghost" size="icon" onClick={() => setDeleteId(e.id)} className="h-8 w-8 rounded-lg hover:bg-destructive/20 hover:text-destructive">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         )}
                       </div>
                     </TableCell>
@@ -836,14 +837,18 @@ export default function Expenses() {
                   </div>
                 </div>
 
-                {hasEdit && (
+                {(hasEdit || hasDelete) && (
                   <div className="flex justify-end gap-2 pt-2 border-t border-border/10">
-                    <Button variant="outline" size="sm" onClick={() => openEditDialog(e)} className="h-8 text-xs rounded-xl glass-panel">
-                      <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setDeleteId(e.id)} className="h-8 text-xs rounded-xl text-destructive hover:bg-destructive/10">
-                      <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
-                    </Button>
+                    {hasEdit && (
+                      <Button variant="outline" size="sm" onClick={() => openEditDialog(e)} className="h-8 text-xs rounded-xl glass-panel">
+                        <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
+                      </Button>
+                    )}
+                    {hasDelete && (
+                      <Button variant="ghost" size="sm" onClick={() => setDeleteId(e.id)} className="h-8 text-xs rounded-xl text-destructive hover:bg-destructive/10">
+                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>

@@ -22,12 +22,13 @@ import {
 import { toast } from "sonner";
 import {
   Shield, ShieldCheck, User, Users, Settings2,
-  ToggleLeft, Eye, Pencil, Plus, RotateCcw, Lock, Activity,
+  Pencil, Plus, RotateCcw, Lock, Activity,
   UserPlus, ArrowRightLeft, AlertTriangle, Trash2, ArrowLeft, Bell, Save, Car, Check,
   Search, Download, RefreshCw, Filter,
 } from "lucide-react";
 import {
-  ALL_PAGES, DEFAULT_PERMISSIONS, type AppRole, type PageKey, type PermissionsMap,
+  ALL_PAGES, DEFAULT_PERMISSIONS, PERMISSION_ACTIONS,
+  type AppRole, type PageKey, type PermissionsMap, type PermissionAction,
 } from "@/lib/permissions";
 import { logAction, describeLog } from "@/lib/logger";
 import { exportToExcel } from "@/lib/exportHelpers";
@@ -54,6 +55,13 @@ const ROLE_CONFIG: Record<string, { label: string; color: string; icon: React.Re
   sales: { label: "Sales", color: "text-sky-600 dark:text-sky-400 font-semibold", icon: <User className="w-3.5 h-3.5 text-sky-500" /> },
   mechanic: { label: "Mechanic", color: "text-violet-600 dark:text-violet-400 font-semibold", icon: <Settings2 className="w-3.5 h-3.5 text-violet-500" /> },
   pending: { label: "Pending", color: "text-rose-600 dark:text-rose-400 font-semibold", icon: <AlertTriangle className="w-3.5 h-3.5 text-rose-500" /> },
+};
+
+const ACTION_TOGGLE_STYLES: Record<string, string> = {
+  view:   "bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/30 hover:bg-sky-500/25",
+  create: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25",
+  edit:   "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/30 hover:bg-indigo-500/25",
+  delete: "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30 hover:bg-rose-500/25",
 };
 
 const ACTION_COLORS: Record<string, string> = {
@@ -462,34 +470,36 @@ export default function Settings() {
     }
   };
 
-  const togglePerm = (r: AppRole, page: PageKey) => {
+  /**
+   * Toggles one action for a role on a page.
+   * View is the base: revoking it revokes everything, and granting any other
+   * action grants View too, so a role can never act on a page it cannot open.
+   */
+  const togglePerm = (r: AppRole, page: PageKey, action: PermissionAction) => {
     setLocalPermissions((prev) => {
       const base = prev ?? livePermissions;
-      const currentView = base[r]?.view ?? [];
-      const currentCreate = (base[r] as any)?.create ?? [];
-      const currentEdit = base[r]?.edit ?? [];
+      const roleperms: any = base[r] ?? {};
+      const lists: Record<PermissionAction, PageKey[]> = {
+        view: [...(roleperms.view ?? [])],
+        create: [...(roleperms.create ?? [])],
+        edit: [...(roleperms.edit ?? [])],
+        delete: [...(roleperms.delete ?? [])],
+      };
 
-      const hasView = currentView.includes(page);
-      const hasCreate = currentCreate.includes(page);
-      const hasEdit = currentEdit.includes(page);
+      const granted = lists[action].includes(page);
+      const drop = (a: PermissionAction) => { lists[a] = lists[a].filter((p) => p !== page); };
+      const add = (a: PermissionAction) => { if (!lists[a].includes(page)) lists[a].push(page); };
 
-      let nextView = [...currentView];
-      let nextCreate = [...currentCreate];
-      let nextEdit = [...currentEdit];
-
-      if (!hasView && !hasCreate && !hasEdit) {
-        nextView.push(page);
-      } else if (hasView && !hasCreate && !hasEdit) {
-        nextCreate.push(page);
-      } else if (hasView && hasCreate && !hasEdit) {
-        nextEdit.push(page);
+      if (granted) {
+        drop(action);
+        // Losing View means losing the page entirely.
+        if (action === "view") { drop("create"); drop("edit"); drop("delete"); }
       } else {
-        nextView = nextView.filter((p) => p !== page);
-        nextCreate = nextCreate.filter((p) => p !== page);
-        nextEdit = nextEdit.filter((p) => p !== page);
+        add(action);
+        if (action !== "view") add("view");
       }
 
-      return { ...base, [r]: { view: nextView, create: nextCreate, edit: nextEdit } };
+      return { ...base, [r]: lists };
     });
     setPermDirty(true);
   };
@@ -573,6 +583,7 @@ export default function Settings() {
           view: ["dashboard", "vehicles"],
           create: ["vehicles"],
           edit: ["vehicles"],
+          delete: [],
         },
       };
 
@@ -859,16 +870,34 @@ export default function Settings() {
             </div>
           </div>
 
-          <div className="text-xs text-muted-foreground bg-muted/40 p-3.5 rounded-xl border border-border/80">
-            Click any cell to cycle access:{" "}
-            <span className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">None</span> →{" "}
-            <span className="px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-600 dark:text-sky-400 font-semibold">View Only</span> →{" "}
-            <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-semibold">View & Add</span> →{" "}
-            <span className="px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 font-semibold">Full Access</span>
+          <div className="text-xs text-muted-foreground bg-muted/40 p-3.5 rounded-xl border border-border/80 space-y-2">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <span>Click each action to grant or revoke it:</span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-6 h-6 rounded-lg inline-flex items-center justify-center text-[10px] font-bold bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30">V</span>
+                View
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-6 h-6 rounded-lg inline-flex items-center justify-center text-[10px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">A</span>
+                Add
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-6 h-6 rounded-lg inline-flex items-center justify-center text-[10px] font-bold bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30">E</span>
+                Edit
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-6 h-6 rounded-lg inline-flex items-center justify-center text-[10px] font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30">D</span>
+                Delete
+              </span>
+            </div>
+            <div className="text-[11px] text-muted-foreground/80">
+              Greyed out means denied. Granting Add, Edit or Delete also grants View; revoking View removes the page entirely.
+              Delete is independent — a role can have Add and Edit without being able to delete anything.
+            </div>
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[500px]">
+            <table className="w-full min-w-[640px]">
               <thead>
                 <tr className="border-b border-border text-left">
                   <th className="pb-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider pr-6">Module / Page</th>
@@ -902,41 +931,30 @@ export default function Settings() {
                 {ALL_PAGES.map((page) => (
                   <tr key={page.key} className="border-t border-border/50 hover:bg-muted/30">
                     <td className="py-3 pr-6 text-xs font-medium text-foreground">{page.label}</td>
-                    {configurableRoles.map((r) => {
-                      const hasView = (permissions[r]?.view ?? []).includes(page.key);
-                      const hasCreate = ((permissions[r] as any)?.create ?? []).includes(page.key);
-                      const hasEdit = (permissions[r]?.edit ?? []).includes(page.key);
-
-                      let btnClass = "bg-muted text-muted-foreground/60 hover:bg-muted/80 hover:text-foreground";
-                      let title = "Grant View access";
-                      let icon = <ToggleLeft className="w-4 h-4" />;
-
-                      if (hasView && !hasCreate && !hasEdit) {
-                        btnClass = "bg-sky-500/15 text-sky-600 dark:text-sky-400 hover:bg-sky-500/25 border border-sky-500/30";
-                        title = "Grant Add access";
-                        icon = <Eye className="w-4 h-4" />;
-                      } else if (hasView && hasCreate && !hasEdit) {
-                        btnClass = "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/30";
-                        title = "Grant Edit access";
-                        icon = <Plus className="w-4 h-4" />;
-                      } else if (hasView && hasCreate && hasEdit) {
-                        btnClass = "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/25 border border-indigo-500/30";
-                        title = "Revoke all access";
-                        icon = <Pencil className="w-3.5 h-3.5" />;
-                      }
-
-                      return (
-                        <td key={r} className="py-3 text-center">
-                          <button
-                            onClick={() => togglePerm(r, page.key)}
-                            className={`inline-flex items-center justify-center w-8 h-8 rounded-xl transition-all ${btnClass}`}
-                            title={title}
-                          >
-                            {icon}
-                          </button>
-                        </td>
-                      );
-                    })}
+                    {configurableRoles.map((r) => (
+                      <td key={r} className="py-3 px-2">
+                        <div className="flex items-center justify-center gap-1">
+                          {PERMISSION_ACTIONS.map((action) => {
+                            const granted = (((permissions[r] as any)?.[action.key] ?? []) as PageKey[]).includes(page.key);
+                            return (
+                              <button
+                                key={action.key}
+                                onClick={() => togglePerm(r as AppRole, page.key, action.key)}
+                                className={`inline-flex items-center justify-center w-7 h-7 rounded-lg text-[10px] font-bold transition-all border ${
+                                  granted
+                                    ? ACTION_TOGGLE_STYLES[action.key]
+                                    : "bg-muted border-transparent text-muted-foreground/40 hover:text-foreground hover:bg-muted/80"
+                                }`}
+                                title={`${granted ? "Revoke" : "Grant"} ${action.label} on ${page.label}`}
+                                aria-pressed={granted}
+                              >
+                                {action.short}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </td>
+                    ))}
                   </tr>
                 ))}
               </tbody>

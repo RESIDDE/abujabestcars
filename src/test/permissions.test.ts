@@ -3,6 +3,7 @@ import {
   canAccess,
   canCreate,
   canEdit,
+  canDelete,
   getAccessiblePages,
   DEFAULT_PERMISSIONS,
   ALL_PAGES,
@@ -57,11 +58,13 @@ describe("Role-based permissions enforcement", () => {
         view: ["vehicles", "customers"],
         create: ["customers"],
         edit: [],
+        delete: [],
       },
       mechanic: {
         view: ["vehicles"],
         create: [],
         edit: [],
+        delete: [],
       },
     };
 
@@ -71,5 +74,45 @@ describe("Role-based permissions enforcement", () => {
     expect(canCreate("sales", "customers", customPerms)).toBe(true);
     expect(canEdit("sales", "customers", customPerms)).toBe(false);
     expect(getAccessiblePages("sales", customPerms)).toEqual(["vehicles", "customers"]);
+  });
+
+  it("treats delete as its own permission, not implied by edit", () => {
+    const perms: PermissionsMap = {
+      admin: DEFAULT_PERMISSIONS.admin,
+      sales: {
+        view: ["vehicles", "customers"],
+        create: ["vehicles", "customers"],
+        edit: ["vehicles", "customers"],
+        delete: ["customers"],
+      },
+      mechanic: {
+        view: ["vehicles"],
+        create: [],
+        edit: [],
+        delete: [],
+      },
+    };
+
+    // Edit on vehicles must NOT grant delete on vehicles.
+    expect(canEdit("sales", "vehicles", perms)).toBe(true);
+    expect(canDelete("sales", "vehicles", perms)).toBe(false);
+
+    // Delete granted explicitly.
+    expect(canDelete("sales", "customers", perms)).toBe(true);
+
+    // Roles with nothing granted cannot delete.
+    expect(canDelete("mechanic", "vehicles", perms)).toBe(false);
+
+    // Admin always can.
+    expect(canDelete("admin", "sales", perms)).toBe(true);
+
+    // No role at all.
+    expect(canDelete(null, "vehicles", perms)).toBe(false);
+  });
+
+  it("gives no role delete rights by default except admin", () => {
+    expect(canDelete("admin", "vehicles")).toBe(true);
+    expect(canDelete("sales", "vehicles")).toBe(false);
+    expect(canDelete("mechanic", "vehicles")).toBe(false);
   });
 });

@@ -39,7 +39,7 @@ import { toast } from "sonner";
 import { exportToExcel, exportToJSON, printTable, exportToCSV, exportToPDF } from "@/lib/exportHelpers";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
-import { canEdit, canCreate } from "@/lib/permissions";
+import { canEdit, canCreate, canDelete } from "@/lib/permissions";
 import { logAction } from "@/lib/logger";
 
 const COLORS = ["hsl(var(--primary))", "hsl(142 76% 36%)", "hsl(38 92% 50%)", "hsl(217 91% 60%)", "hsl(0 84% 60%)", "hsl(199 89% 48%)"];
@@ -72,6 +72,7 @@ export default function VehiclesList() {
   const { role } = useAuth();
   const { permissions } = usePermissions();
   const hasEdit = canEdit(role, "vehicles", permissions);
+  const hasDelete = canDelete(role, "vehicles", permissions);
 
   const activeTab = searchParams.get("tab") === "sold" ? "sold" : "active";
 
@@ -611,7 +612,7 @@ export default function VehiclesList() {
           </Select>
         </div>
         
-        {hasEdit && soldCount > 0 && (
+        {hasDelete && soldCount > 0 && (
           <div className="z-10">
             <Button 
               variant="ghost" 
@@ -793,28 +794,32 @@ export default function VehiclesList() {
                         </span>
                       )}
 
-                      {hasEdit && (
+                      {(hasEdit || hasDelete) && (
                         <div className="flex items-center gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            asChild
-                            className="rounded-full h-9 w-9 hover:bg-muted text-muted-foreground hover:text-foreground"
-                            title="Edit Vehicle"
-                          >
-                            <Link to={`/vehicles/${v.id}/edit`}>
-                              <Pencil className="w-3.5 h-3.5" />
-                            </Link>
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => setDeleteId(v.id)} 
-                            className="rounded-full h-9 w-9 hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-                            title="Delete Vehicle"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
+                          {hasEdit && (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              asChild
+                              className="rounded-full h-9 w-9 hover:bg-muted text-muted-foreground hover:text-foreground"
+                              title="Edit Vehicle"
+                            >
+                              <Link to={`/vehicles/${v.id}/edit`}>
+                                <Pencil className="w-3.5 h-3.5" />
+                              </Link>
+                            </Button>
+                          )}
+                          {hasDelete && (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => setDeleteId(v.id)} 
+                              className="rounded-full h-9 w-9 hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                              title="Delete Vehicle"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -887,10 +892,10 @@ export default function VehiclesList() {
                       <div className="flex justify-end gap-1 opacity-50 group-hover:opacity-100 transition-opacity">
                         <Button variant="ghost" size="icon" asChild className="h-8 w-8 rounded-lg hover:bg-primary/20 hover:text-primary"><Link to={`/vehicles/${v.id}`}><Eye className="h-4 w-4" /></Link></Button>
                         {hasEdit && (
-                          <>
-                            <Button variant="ghost" size="icon" asChild className="h-8 w-8 rounded-lg hover:bg-foreground/20"><Link to={`/vehicles/${v.id}/edit`}><Pencil className="h-4 w-4" /></Link></Button>
-                            <Button variant="ghost" size="icon" onClick={() => setDeleteId(v.id)} className="h-8 w-8 rounded-lg hover:bg-destructive/20 hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
-                          </>
+                          <Button variant="ghost" size="icon" asChild className="h-8 w-8 rounded-lg hover:bg-foreground/20"><Link to={`/vehicles/${v.id}/edit`}><Pencil className="h-4 w-4" /></Link></Button>
+                        )}
+                        {hasDelete && (
+                          <Button variant="ghost" size="icon" onClick={() => setDeleteId(v.id)} className="h-8 w-8 rounded-lg hover:bg-destructive/20 hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
                         )}
                       </div>
                     </TableCell>

@@ -44,7 +44,7 @@ import { toast } from "sonner";
 import { exportToExcel, exportToJSON, printTable } from "@/lib/exportHelpers";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
-import { canEdit, canCreate } from "@/lib/permissions";
+import { canEdit, canCreate, canDelete } from "@/lib/permissions";
 import { getPrintHeaderHTML, getPrintWatermarkHTML } from "@/components/PrintHeader";
 import { getPrintFooterHTML } from "@/components/PrintFooter";
 import { numberToWords } from "@/lib/numberToWords";
@@ -101,6 +101,7 @@ export default function Sales() {
   const { role } = useAuth();
   const { permissions } = usePermissions();
   const hasEdit = canEdit(role, "sales", permissions);
+  const hasDelete = canDelete(role, "sales", permissions);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -1408,26 +1409,30 @@ export default function Sales() {
                         </DropdownMenuContent>
                       </DropdownMenu>
 
-                      {hasEdit && (
+                      {(hasEdit || hasDelete) && (
                         <div className="flex items-center gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => openEdit(s)} 
-                            className="rounded-full h-9 w-9 hover:bg-muted text-muted-foreground hover:text-foreground"
-                            title="Edit Sale"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => setDeleteId(s.id)} 
-                            className="rounded-full h-9 w-9 hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
-                            title="Delete Sale"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
+                          {hasEdit && (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => openEdit(s)} 
+                              className="rounded-full h-9 w-9 hover:bg-muted text-muted-foreground hover:text-foreground"
+                              title="Edit Sale"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                          {hasDelete && (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => setDeleteId(s.id)} 
+                              className="rounded-full h-9 w-9 hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                              title="Delete Sale"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1567,14 +1572,14 @@ export default function Sales() {
                             )}
                           </Button>
                           {hasEdit && (
-                            <>
-                              <Button variant="ghost" size="icon" onClick={() => openEdit(s)} className="h-8 w-8 rounded-lg hover:bg-foreground/20">
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" onClick={() => setDeleteId(s.id)} className="h-8 w-8 rounded-lg hover:bg-destructive/20 hover:text-destructive">
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </>
+                            <Button variant="ghost" size="icon" onClick={() => openEdit(s)} className="h-8 w-8 rounded-lg hover:bg-foreground/20">
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {hasDelete && (
+                            <Button variant="ghost" size="icon" onClick={() => setDeleteId(s.id)} className="h-8 w-8 rounded-lg hover:bg-destructive/20 hover:text-destructive">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           )}
                         </div>
                       </TableCell>
