@@ -148,7 +148,7 @@ export default function SignSale() {
           Official Abuja Best Cars LTD Customer Portal
         </div>
         <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-          Vehicle Invoice &amp; Receipt
+          Vehicle Sales Receipt
         </h1>
         <p className="text-xs sm:text-sm text-zinc-400 mt-1">
           {alreadySigned

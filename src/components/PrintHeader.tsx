@@ -137,8 +137,8 @@ export const MODERN_FONT = "'Helvetica Neue', Helvetica, Arial, sans-serif";
  * Update here to change it everywhere the payment panel appears.
  */
 export const COMPANY_BANK = {
-  bank: "Zenith Bank",
-  account: "1229785752",
+  bank: "GT Bank",
+  account: "3003192962",
   accountName: "ABUJA BEST CARS",
 };
 

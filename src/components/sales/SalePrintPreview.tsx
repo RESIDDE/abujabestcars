@@ -34,11 +34,11 @@ export interface SalePrintPreviewProps {
 
 const RED = BRAND_RED;
 
-/* ---------- Invoice / Payment Receipt ---------- */
+/* ---------- Sales Receipt ---------- */
 
 const exactPrint = { WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" } as React.CSSProperties;
 
-function ModernInvoice(props: any) {
+function SalesReceipt(props: any) {
   const {
     docNumber,
     date,
@@ -86,7 +86,7 @@ function ModernInvoice(props: any) {
 
   return (
     <div style={{ fontFamily: MODERN_FONT, color: INK }}>
-      <ModernLetterhead docTitle={isPaymentReceipt ? "Receipt" : "Invoice"} docNumber={docNumber} />
+      <ModernLetterhead docTitle="Receipt" docNumber={docNumber} />
 
       <div style={{ height: 1, background: RULE, margin: "15px 0 17px", ...exactPrint }} />
 
@@ -319,7 +319,7 @@ export const SaleReceiptSheet = forwardRef<HTMLDivElement, SaleReceiptSheetProps
     const receiptDate = payment?.payment_date || sale?.sale_date || sale?.created_at || new Date().toISOString();
     const serial = (payment?.id || sale?.id || "").replace(/\D/g, "").slice(0, 4).padStart(4, "0");
     const issuedOn = new Date(receiptDate);
-    const docNumber = `${isPaymentReceipt ? "RCT" : "INV"}-${String(issuedOn.getDate()).padStart(2, "0")}${String(
+    const docNumber = `RCT-${String(issuedOn.getDate()).padStart(2, "0")}${String(
       issuedOn.getMonth() + 1
     ).padStart(2, "0")}-${serial}`;
     const grandTotal = isPaymentReceipt ? paymentAmount : totalSalePrice;
@@ -394,7 +394,7 @@ export const SaleReceiptSheet = forwardRef<HTMLDivElement, SaleReceiptSheetProps
       isSigningMode,
     };
 
-    const invoiceProps = shared;
+    const receiptProps = shared;
 
     return (
       <div
@@ -404,7 +404,7 @@ export const SaleReceiptSheet = forwardRef<HTMLDivElement, SaleReceiptSheetProps
       >
         <PrintWatermark opacity={0.05} />
         <div style={{ position: "relative", zIndex: 1 }}>
-          <ModernInvoice {...invoiceProps} />
+          <SalesReceipt {...receiptProps} />
         </div>
         <div
           style={{
