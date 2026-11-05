@@ -12,10 +12,8 @@ export function SignaturePad({ value, onChange }: SignaturePadProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasDrawn, setHasDrawn] = useState(false);
-  const { resolvedTheme, theme } = useTheme();
-
-  const isDark = resolvedTheme === "dark" || theme === "dark";
-  const strokeColor = isDark ? "#ffffff" : "#0f172a";
+  // Always capture digital signatures with solid black ink so they render crisply on receipts and documents
+  const strokeColor = "#000000";
 
   // Initialize and size canvas
   useEffect(() => {
@@ -118,10 +116,10 @@ export function SignaturePad({ value, onChange }: SignaturePadProps) {
 
   return (
     <div className="space-y-2">
-      <div className="relative rounded-xl border border-border bg-zinc-100/90 dark:bg-zinc-950/80 shadow-inner overflow-hidden">
+      <div className="relative rounded-2xl border-2 border-zinc-300 dark:border-zinc-600 bg-white shadow-inner overflow-hidden">
         <canvas
           ref={canvasRef}
-          className="w-full h-40 cursor-crosshair touch-none"
+          className="w-full h-40 cursor-crosshair touch-none bg-white"
           onMouseDown={startDraw}
           onMouseMove={draw}
           onMouseUp={endDraw}
@@ -131,12 +129,12 @@ export function SignaturePad({ value, onChange }: SignaturePadProps) {
           onTouchEnd={endDraw}
         />
         {!hasDrawn && !value && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-muted-foreground/60 text-xs font-medium tracking-wider uppercase gap-1.5 select-none">
-            <PenLine className="w-4 h-4 opacity-50" />
-            <span>Sign here with mouse or touch</span>
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-zinc-400 text-xs font-semibold tracking-wider uppercase gap-1.5 select-none">
+            <PenLine className="w-4 h-4 opacity-60 text-zinc-500" />
+            <span>Sign here with finger or mouse</span>
           </div>
         )}
-        <div className="pointer-events-none absolute bottom-4 left-6 right-6 border-b border-dashed border-zinc-300 dark:border-zinc-700/50" />
+        <div className="pointer-events-none absolute bottom-5 left-6 right-6 border-b border-dashed border-zinc-300" />
       </div>
       <div className="flex items-center justify-between">
         <Button 

@@ -425,7 +425,7 @@ export default function AuthorityToSell() {
                 <p className="text-[10px] font-bold text-gray-600 mb-0.5">Owner / Representative Signature:</p>
                 <div className="h-12 border-b border-gray-800 mb-1.5 flex items-end">
                   {previewData.signature && (
-                    <img src={previewData.signature} alt="Owner Signature" className="max-h-10 object-contain" />
+                    <img src={previewData.signature} alt="Owner Signature" className="max-h-10 object-contain" style={{ filter: "brightness(0)" }} />
                   )}
                 </div>
                 <div className="flex flex-col gap-1">
@@ -455,7 +455,7 @@ export default function AuthorityToSell() {
                 <p className="text-[10px] font-bold text-gray-600 mb-0.5">Company Representatives Signature:</p>
                 <div className="h-12 border-b border-gray-800 mb-1.5 flex items-end">
                   {previewData.repSignature && (
-                    <img src={previewData.repSignature} alt="Rep Signature" className="max-h-10 object-contain" />
+                    <img src={previewData.repSignature} alt="Rep Signature" className="max-h-10 object-contain" style={{ filter: "brightness(0)" }} />
                   )}
                 </div>
                 <div className="flex items-baseline gap-2 border-b border-gray-400 pb-0.5 mb-1">

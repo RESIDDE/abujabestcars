@@ -1,104 +1,130 @@
 import React from 'react';
+import { BRAND_DARK } from '@/components/PrintHeader';
 
 interface PrintFooterProps {
-  customerSignature?: string;
-  companySignature?: string;
+  customerSignature?: string | null;
+  companySignature?: string | null;
+  customerSignatureDate?: string | null;
+  companySignatureDate?: string | null;
   showSignatures?: boolean;
+  customerLabel?: string;
+  companyLabel?: string;
 }
 
-// For use inside React DOM trees (like AuthorityToSell.tsx)
-export function PrintFooter({ customerSignature, companySignature, showSignatures = false }: PrintFooterProps = {}) {
-  const shouldShowSignatures = showSignatures || Boolean(customerSignature || companySignature);
+const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleDateString('en-GB') : '');
 
+function SignSlot({
+  label,
+  signature,
+  date,
+  align,
+}: {
+  label: string;
+  signature?: string | null;
+  date?: string | null;
+  align: 'left' | 'right';
+}) {
   return (
-    <div className="mt-4 pt-2 break-inside-avoid print:break-inside-avoid relative">
-      {/* Signature section */}
-      {shouldShowSignatures && (
-        <div className="flex justify-between items-end mb-4 px-1">
-          <div className="text-left">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-800 mb-1.5">CUSTOMER'S SIGN</p>
-            <div className="w-[160px] h-[36px] border border-gray-400 bg-white flex items-center justify-center overflow-hidden">
-              {customerSignature ? (
-                <img src={customerSignature} alt="Customer Signature" className="max-h-[34px] max-w-[150px] object-contain" />
-              ) : null}
-            </div>
-          </div>
-          <div className="text-left">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-800 mb-1.5">ABUJA BEST CARS SIGN</p>
-            <div className="w-[160px] h-[36px] border border-gray-400 bg-white flex items-center justify-center overflow-hidden">
-              {companySignature ? (
-                <img src={companySignature} alt="Company Signature" className="max-h-[34px] max-w-[150px] object-contain" />
-              ) : null}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Thanks message */}
-      <p className="text-center text-[12px] italic text-gray-700 my-3" style={{ fontFamily: 'Georgia, serif' }}>
-        Thanks for your patronage
-      </p>
-
-      {/* Bottom geometric accent: Blue polygon on left + red stripe */}
-      <div className="relative mt-2 h-7 w-full overflow-hidden">
-        <div
-          className="absolute left-0 bottom-0 w-9 h-7 bg-[#1E3A8A]"
-          style={{ clipPath: 'polygon(0 100%, 100% 100%, 75% 0, 0 45%)' }}
-        />
-        <div className="absolute left-7 right-0 bottom-0 h-1 bg-[#C0392B]" />
+    <div style={{ textAlign: align, fontFamily: 'Georgia, serif', fontStyle: 'italic', fontSize: 13, minWidth: 190 }}>
+      <div
+        style={{
+          height: 46,
+          display: 'flex',
+          alignItems: 'flex-end',
+          justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
+          paddingBottom: 2,
+        }}
+      >
+        {signature ? (
+          <img
+            src={signature}
+            alt={label}
+            style={{ maxHeight: 44, maxWidth: 180, objectFit: 'contain', filter: 'brightness(0)', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' } as React.CSSProperties}
+          />
+        ) : null}
+      </div>
+      <div style={{ borderTop: '1px solid #333', width: 190, marginLeft: align === 'right' ? 'auto' : 0, paddingTop: 3 }}>
+        {label}
+        {date && <div style={{ fontSize: 10, color: '#555', fontStyle: 'normal', marginTop: 1 }}>{fmtDate(date)}</div>}
       </div>
     </div>
   );
 }
 
-export function getPrintFooterHTML(customerSignature?: string, companySignature?: string, showSignatures: boolean = false) {
+/**
+ * Footer matching the "Registered Vehicle" Cash/Credit Invoice:
+ * Customer's Sign · Thanks for your patronage · Manager's Sign, followed by the dark brand bar.
+ */
+export function PrintFooter({
+  customerSignature,
+  companySignature,
+  customerSignatureDate,
+  companySignatureDate,
+  showSignatures = false,
+  customerLabel = "Customer's Sign",
+  companyLabel = "Manager's Sign",
+}: PrintFooterProps = {}) {
   const shouldShowSignatures = showSignatures || Boolean(customerSignature || companySignature);
 
-  const custSigHTML = customerSignature 
-    ? `<img src="${customerSignature}" style="max-height: 32px; max-width: 145px; object-fit: contain; display: block; margin: 0 auto;" />`
-    : '';
-  const compSigHTML = companySignature 
-    ? `<img src="${companySignature}" style="max-height: 32px; max-width: 145px; object-fit: contain; display: block; margin: 0 auto;" />`
-    : '';
+  return (
+    <div className="break-inside-avoid print:break-inside-avoid" style={{ marginTop: 22, position: 'relative', zIndex: 1 }}>
+      {shouldShowSignatures ? (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+          <SignSlot label={customerLabel} signature={customerSignature} date={customerSignatureDate} align="left" />
+          <div style={{ fontFamily: 'Georgia, serif', fontStyle: 'italic', fontSize: 12, textAlign: 'center', paddingBottom: 6 }}>
+            Thanks for your patronage
+          </div>
+          <SignSlot label={companyLabel} signature={companySignature} date={companySignatureDate} align="right" />
+        </div>
+      ) : (
+        <p style={{ textAlign: 'center', fontFamily: 'Georgia, serif', fontStyle: 'italic', fontSize: 12, color: '#333', margin: '6px 0' }}>
+          Thanks for your patronage
+        </p>
+      )}
 
-  const signatureSectionHTML = shouldShowSignatures ? `
-      <!-- Signature section -->
-      <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px; padding: 0 2px;">
-        <div style="text-align: left;">
-          <p style="font-family: Arial, sans-serif; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #222; margin: 0 0 5px 0;">CUSTOMER'S SIGN</p>
-          <div style="width: 155px; height: 34px; border: 1px solid #777; background: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden;">
-            ${custSigHTML}
-          </div>
-        </div>
-        <div style="text-align: left;">
-          <p style="font-family: Arial, sans-serif; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #222; margin: 0 0 5px 0;">ABUJA BEST CARS SIGN</p>
-          <div style="width: 155px; height: 34px; border: 1px solid #777; background: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden;">
-            ${compSigHTML}
-          </div>
-        </div>
+      {/* Dark brand bar (as on the printed booklet) */}
+      <div
+        style={{
+          marginTop: 12,
+          height: 9,
+          width: '100%',
+          background: BRAND_DARK,
+          WebkitPrintColorAdjust: 'exact',
+          printColorAdjust: 'exact',
+        } as React.CSSProperties}
+      />
+    </div>
+  );
+}
+
+export function getPrintFooterHTML(
+  customerSignature?: string | null,
+  companySignature?: string | null,
+  showSignatures: boolean = false,
+) {
+  const shouldShowSignatures = showSignatures || Boolean(customerSignature || companySignature);
+
+  const slot = (label: string, sig: string | null | undefined, align: 'left' | 'right') => `
+    <div style="text-align: ${align}; font-family: Georgia, serif; font-style: italic; font-size: 13px; min-width: 190px;">
+      <div style="height: 46px; display: flex; align-items: flex-end; justify-content: ${align === 'right' ? 'flex-end' : 'flex-start'}; padding-bottom: 2px;">
+        ${sig ? `<img src="${sig}" style="max-height: 44px; max-width: 180px; object-fit: contain; filter: brightness(0); -webkit-filter: brightness(0);" />` : ''}
       </div>
-  ` : '';
+      <div style="border-top: 1px solid #333; width: 190px; ${align === 'right' ? 'margin-left: auto;' : ''} padding-top: 3px;">${label}</div>
+    </div>`;
+
+  const signatureSection = shouldShowSignatures
+    ? `
+      <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+        ${slot("Customer's Sign", customerSignature, 'left')}
+        <div style="font-family: Georgia, serif; font-style: italic; font-size: 12px; text-align: center; padding-bottom: 6px;">Thanks for your patronage</div>
+        ${slot("Manager's Sign", companySignature, 'right')}
+      </div>`
+    : `<p style="text-align: center; font-family: Georgia, serif; font-style: italic; font-size: 12px; color: #333; margin: 6px 0;">Thanks for your patronage</p>`;
 
   return `
-    <div style="margin-top: 14px; padding-top: 4px; page-break-inside: avoid; break-inside: avoid; position: relative;">
-      ${signatureSectionHTML}
-      
-      <!-- Thanks message -->
-      <p style="text-align: center; font-family: Georgia, serif; font-size: 12px; font-style: italic; color: #444; margin: 10px 0 14px 0;">
-        Thanks for your patronage
-      </p>
-
-      <!-- Bottom Graphic Bar -->
-      <div style="position: relative; height: 26px; width: 100%; margin-top: 6px; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
-        <svg style="position: absolute; left: 30px; right: 0; bottom: 0; width: calc(100% - 30px); height: 4px; -webkit-print-color-adjust: exact; print-color-adjust: exact;" viewBox="0 0 100 4" preserveAspectRatio="none">
-          <rect x="0" y="0" width="100" height="4" fill="#C0392B" />
-        </svg>
-        <svg style="position: absolute; left: 0; bottom: 0; width: 44px; height: 26px; -webkit-print-color-adjust: exact; print-color-adjust: exact;" viewBox="0 0 44 26">
-          <polygon points="0,12 32,0 44,26 0,26" fill="#1E3A8A" />
-        </svg>
-      </div>
+    <div style="margin-top: 22px; page-break-inside: avoid; break-inside: avoid; position: relative; z-index: 1;">
+      ${signatureSection}
+      <div style="margin-top: 12px; height: 9px; width: 100%; background: ${BRAND_DARK}; -webkit-print-color-adjust: exact; print-color-adjust: exact;"></div>
     </div>
   `;
 }
-
-

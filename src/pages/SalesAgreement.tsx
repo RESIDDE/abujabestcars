@@ -535,7 +535,7 @@ export default function SalesAgreement() {
                   <p className="text-[9px] font-bold text-gray-700 mb-0.5">Buyer's Name &amp; Signature:</p>
                   <div className="h-8 border-b border-gray-800 mb-1 flex items-end">
                     {previewData.buyerSignature ? (
-                      <img src={previewData.buyerSignature} alt="Buyer Signature" className="max-h-7 object-contain" />
+                      <img src={previewData.buyerSignature} alt="Buyer Signature" className="max-h-7 object-contain" style={{ filter: "brightness(0)" }} />
                     ) : <span className="text-transparent select-none">__________________</span>}
                   </div>
                   <div className="flex items-baseline gap-1 border-b border-gray-400 pb-0.5">
@@ -549,7 +549,7 @@ export default function SalesAgreement() {
                   <p className="text-[9px] font-bold text-gray-700 mb-0.5">Seller's Name &amp; Signature:</p>
                   <div className="h-8 border-b border-gray-800 mb-1 flex items-end">
                     {previewData.sellerSignature ? (
-                      <img src={previewData.sellerSignature} alt="Seller Signature" className="max-h-7 object-contain" />
+                      <img src={previewData.sellerSignature} alt="Seller Signature" className="max-h-7 object-contain" style={{ filter: "brightness(0)" }} />
                     ) : <span className="text-transparent select-none">__________________</span>}
                   </div>
                   <div className="flex items-baseline gap-1 border-b border-gray-400 pb-0.5">
@@ -563,7 +563,7 @@ export default function SalesAgreement() {
                   <p className="text-[9px] font-bold text-gray-700 mb-0.5">Buyer's Witness Name &amp; Signature:</p>
                   <div className="h-8 border-b border-gray-800 mb-1 flex items-end">
                     {previewData.buyerWitnessSignature ? (
-                      <img src={previewData.buyerWitnessSignature} alt="Buyer Witness Signature" className="max-h-7 object-contain" />
+                      <img src={previewData.buyerWitnessSignature} alt="Buyer Witness Signature" className="max-h-7 object-contain" style={{ filter: "brightness(0)" }} />
                     ) : <span className="text-transparent select-none">__________________</span>}
                   </div>
                   <div className="flex items-baseline gap-1 border-b border-gray-400 pb-0.5">
@@ -577,7 +577,7 @@ export default function SalesAgreement() {
                   <p className="text-[9px] font-bold text-gray-700 mb-0.5">Seller's Witness Name &amp; Signature:</p>
                   <div className="h-8 border-b border-gray-800 mb-1 flex items-end">
                     {previewData.sellerWitnessSignature ? (
-                      <img src={previewData.sellerWitnessSignature} alt="Seller Witness Signature" className="max-h-7 object-contain" />
+                      <img src={previewData.sellerWitnessSignature} alt="Seller Witness Signature" className="max-h-7 object-contain" style={{ filter: "brightness(0)" }} />
                     ) : <span className="text-transparent select-none">__________________</span>}
                   </div>
                   <div className="flex items-baseline gap-1 border-b border-gray-400 pb-0.5">
@@ -593,7 +593,7 @@ export default function SalesAgreement() {
                   <p className="text-[9px] font-bold text-gray-700 mb-0.5">Abuja Best Cars Rep Signature:</p>
                   <div className="h-7 border-b border-gray-800 mb-0.5 flex items-end">
                     {previewData.repSignature && (
-                      <img src={previewData.repSignature} alt="Rep Signature" className="max-h-6 object-contain" />
+                      <img src={previewData.repSignature} alt="Rep Signature" className="max-h-6 object-contain" style={{ filter: "brightness(0)" }} />
                     )}
                   </div>
                   <div className="flex items-baseline gap-1">

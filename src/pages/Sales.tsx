@@ -170,7 +170,7 @@ export default function Sales() {
   const { data: customers = [] } = useQuery({
     queryKey: ["customers"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("customers").select("id, name, phone, email, address");
+      const { data, error } = await supabase.from("customers").select("id, name, phone, email, address, signature_data");
       if (error) throw error;
       return data;
     },
@@ -915,10 +915,11 @@ export default function Sales() {
   };
 
   if (printMode && previewSale) {
+    const activePreviewSale = sales.find((s: any) => s.id === previewSale.id) || previewSale;
     return (
       <SalePrintPreview
-        sale={previewSale}
-        customer={customerObjMap[previewSale.customer_id]}
+        sale={activePreviewSale}
+        customer={customerObjMap[activePreviewSale.customer_id]}
         vehicles={vehicles}
         payment={previewPayment}
         paymentIndex={previewPaymentIndex}
@@ -930,7 +931,7 @@ export default function Sales() {
           setPreviewPaymentIndex(undefined);
           setPreviewAllPayments([]);
         }}
-        onDownloadPdf={() => downloadSaleReceipt(previewSale, "pdf")}
+        onDownloadPdf={() => downloadSaleReceipt(activePreviewSale, "pdf")}
       />
     );
   }
