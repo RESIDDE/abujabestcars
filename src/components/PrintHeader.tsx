@@ -12,8 +12,7 @@ export const COMPANY = {
   name: "ABUJA BEST CARS LTD",
   rc: "RC: 9158490",
   tagline: "Sales and suppliers of all kinds of cars",
-  headOffice: "Suite G4, Cars 45, Humaza Plaza, Rainoil Filling Station, Gwarinpa",
-  branchOffice: "Katampe Bridge, Beside Affin Filling Station, Abuja",
+  address: "Katampe Bridge, Beside Affin Filling Station, Abuja",
   tel: "+234 903 995 4141",
   email: "ifeanyiezenwa12@gmail.com",
 };
@@ -37,8 +36,7 @@ export function PrintHeader({ children }: { children?: React.ReactNode } = {}) {
           {COMPANY.tagline}
         </div>
         <div style={{ fontSize: 10.5, color: "#222", marginTop: 4, lineHeight: 1.45, fontFamily: "Georgia, serif" }}>
-          <b>Head Office:</b> {COMPANY.headOffice}<br />
-          <b>Branch Offices:</b> {COMPANY.branchOffice}<br />
+          <b>Office:</b> {COMPANY.address}<br />
           <b>Tel:</b> {COMPANY.tel} &nbsp; <b>Email:</b> {COMPANY.email}
         </div>
       </div>
@@ -58,8 +56,7 @@ export function getPrintHeaderHTML(base64Logo?: string) {
         <div style="font-family: 'Arial Black', Arial, sans-serif; font-weight: 900; font-size: 31px; letter-spacing: -0.5px; color: ${BRAND_DARK}; line-height: 1.05; margin-top: 10px;">${COMPANY.name}</div>
         <div style="font-family: Georgia, serif; font-style: italic; font-weight: 700; font-size: 14px; color: ${BRAND_RED}; margin-top: 2px;">${COMPANY.tagline}</div>
         <div style="font-size: 10.5px; color: #222; margin-top: 4px; line-height: 1.45; font-family: Georgia, serif;">
-          <b>Head Office:</b> ${COMPANY.headOffice}<br/>
-          <b>Branch Offices:</b> ${COMPANY.branchOffice}<br/>
+          <b>Office:</b> ${COMPANY.address}<br/>
           <b>Tel:</b> ${COMPANY.tel} &nbsp; <b>Email:</b> ${COMPANY.email}
         </div>
       </div>
@@ -167,8 +164,7 @@ export function ModernLetterhead({ docTitle, docNumber }: { docTitle: string; do
             {COMPANY.name}
           </div>
           <div style={{ fontSize: 9, color: "#6b6b6b", lineHeight: 1.55, marginTop: 3, maxWidth: 290 }}>
-            {COMPANY.headOffice}<br />
-            {COMPANY.branchOffice}<br />
+            {COMPANY.address}<br />
             {COMPANY.tel}
           </div>
         </div>

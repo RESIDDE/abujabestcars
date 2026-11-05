@@ -238,7 +238,7 @@ function SalesReceipt(props: any) {
       <div style={{ marginTop: 22, textAlign: "center", position: "relative", zIndex: 1 }}>
         <div style={{ fontSize: 10.5, fontWeight: 700 }}>Thank you for your business!</div>
         <div style={{ fontSize: 8.5, color: "#888", marginTop: 3 }}>
-          {COMPANY.headOffice} &nbsp;·&nbsp; {COMPANY.tel}
+          {COMPANY.address} &nbsp;·&nbsp; {COMPANY.tel}
         </div>
         <div style={{ fontSize: 8, color: "#a5a5a5", marginTop: 4, fontStyle: "italic" }}>
           Vehicle received in good condition. No refund of money after payment.

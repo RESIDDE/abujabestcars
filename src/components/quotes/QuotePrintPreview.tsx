@@ -283,7 +283,7 @@ export const QuoteDocument = forwardRef<HTMLDivElement, { quote: any }>(({ quote
         <div style={{ marginTop: 26, textAlign: "center" }}>
           <div style={{ fontSize: 10.5, fontWeight: 700 }}>Thank you for your business!</div>
           <div style={{ fontSize: 8.5, color: "#888", marginTop: 3 }}>
-            {COMPANY.headOffice} &nbsp;&middot;&nbsp; {COMPANY.tel}
+            {COMPANY.address} &nbsp;&middot;&nbsp; {COMPANY.tel}
           </div>
           <div style={{ fontSize: 8, color: "#a5a5a5", marginTop: 4, fontStyle: "italic" }}>
             This is a Proforma Invoice and not a receipt of payment. No refund of money after payment.
