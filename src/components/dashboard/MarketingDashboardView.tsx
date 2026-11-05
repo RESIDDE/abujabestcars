@@ -11,6 +11,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { exportToCSV } from "@/lib/exportHelpers";
+import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
+import { canAccess, type AppRole } from "@/lib/permissions";
 
 export interface ERPDashboardProps {
   vehicles?: any[];
@@ -36,6 +39,8 @@ export function ERPInventoryDashboardView({
   showDealershipView = false,
 }: ERPDashboardProps) {
   const navigate = useNavigate();
+  const { role } = useAuth();
+  const { permissions } = usePermissions();
   const [activeDock, setActiveDock] = useState<string>("fleet");
   const [currency, setCurrency] = useState<"NGN" | "USD">("NGN");
   const [selectedDateRange, setSelectedDateRange] = useState<string>("All Time");
@@ -154,27 +159,48 @@ export function ERPInventoryDashboardView({
     return filteredSales.reduce((sum, s) => sum + Number(s.sale_price || 0), 0);
   }, [filteredSales]);
 
+  // Compute actual vehicle acquisition cost for a sale
+  const getSaleVehicleCost = (s: any): number => {
+    // 1. Check sale_vehicles relation (multi-vehicle sales)
+    const saleVehs = (s.sale_vehicles || []).map((sv: any) => sv.vehicles).filter(Boolean);
+    if (saleVehs.length > 0) {
+      return saleVehs.reduce((sum: number, v: any) => sum + Number(v.cost_price || 0), 0);
+    }
+
+    // 2. Check direct relation vehicles (single-vehicle sales)
+    const linkedVeh = (s as any).vehicles;
+    if (linkedVeh && linkedVeh.cost_price != null) {
+      return Number(linkedVeh.cost_price || 0);
+    }
+
+    // 3. Fallback: search in vehicles catalog by vehicle_id
+    if (s.vehicle_id) {
+      const foundInVehicles = vehicles.find((v) => v.id === s.vehicle_id);
+      if (foundInVehicles && foundInVehicles.cost_price != null) {
+        return Number(foundInVehicles.cost_price || 0);
+      }
+    }
+
+    // 4. Check sale_vehicles vehicle_id against vehicles catalog
+    const vIds = (s.sale_vehicles || []).map((sv: any) => sv.vehicle_id).filter(Boolean);
+    if (vIds.length > 0) {
+      return vIds.reduce((sum: number, vid: string) => {
+        const found = vehicles.find((v) => v.id === vid);
+        return sum + Number(found?.cost_price || 0);
+      }, 0);
+    }
+
+    return 0;
+  };
+
   // Compute total vehicle cost for sold vehicles
   const soldVehiclesCost = useMemo(() => {
-    return filteredSales.reduce((sum, s) => {
-      const linkedVeh = (s as any).vehicles;
-      const costFromRelation = Number(linkedVeh?.cost_price || 0);
-      if (costFromRelation > 0) return sum + costFromRelation;
-
-      // Fallback: search in vehicles array by vehicle_id
-      const foundInVehicles = vehicles.find((v) => v.id === s.vehicle_id);
-      const costFromCatalog = Number(foundInVehicles?.cost_price || 0);
-      if (costFromCatalog > 0) return sum + costFromCatalog;
-
-      // If no cost is recorded, assume standard 85% acquisition cost (15% gross margin)
-      const sale = Number(s.sale_price || 0);
-      return sum + (sale > 0 ? sale * 0.85 : 0);
-    }, 0);
+    return filteredSales.reduce((sum, s) => sum + getSaleVehicleCost(s), 0);
   }, [filteredSales, vehicles]);
 
   // Realized Gross Profit = Sales Revenue - Acquisition Cost
   const totalGrossProfit = useMemo(() => {
-    return Math.max(0, totalSalesRevenue - soldVehiclesCost);
+    return totalSalesRevenue - soldVehiclesCost;
   }, [totalSalesRevenue, soldVehiclesCost]);
 
   // Total operating expenses for the period
@@ -511,12 +537,8 @@ export function ERPInventoryDashboardView({
     return sorted.map((s, idx) => {
       const salePrice = Number(s.sale_price || 0);
       const linkedVeh = (s as any).vehicles;
-      const costPrice =
-        Number(linkedVeh?.cost_price || 0) ||
-        Number(vehicles.find((v) => v.id === s.vehicle_id)?.cost_price || 0) ||
-        Math.round(salePrice * 0.85);
-
-      const dealProfit = Math.max(0, salePrice - costPrice);
+      const costPrice = getSaleVehicleCost(s);
+      const dealProfit = salePrice - costPrice;
 
       cumulativeRevenue += salePrice;
       cumulativeCost += costPrice;
@@ -754,38 +776,42 @@ export function ERPInventoryDashboardView({
           {/* ══ Vertical Left Icon Dock ══════════════════════════════════ */}
           <div className="hidden sm:flex flex-col items-center gap-3.5 p-2 rounded-2xl bg-white dark:bg-[#22242a] border border-slate-200 dark:border-[#2e3138] shadow-md dark:shadow-lg shrink-0">
             {/* Showroom Fleet Inventory */}
-            <button
-              onClick={() => {
-                setActiveDock("fleet");
-                navigate("/vehicles");
-                toast.info("Navigating to Showroom Fleet Inventory");
-              }}
-              title="Showroom Fleet Inventory"
-              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
-                activeDock === "fleet"
-                  ? "bg-[#d4ff32] text-black shadow-lg shadow-[#d4ff32]/30 scale-105"
-                  : "text-slate-400 dark:text-[#8a8d98] hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#2a2d35]"
-              }`}
-            >
-              <Car className="w-5 h-5" />
-            </button>
+            {canAccess(role as AppRole, "vehicles", permissions) && (
+              <button
+                onClick={() => {
+                  setActiveDock("fleet");
+                  navigate("/vehicles");
+                  toast.info("Navigating to Showroom Fleet Inventory");
+                }}
+                title="Showroom Fleet Inventory"
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                  activeDock === "fleet"
+                    ? "bg-[#d4ff32] text-black shadow-lg shadow-[#d4ff32]/30 scale-105"
+                    : "text-slate-400 dark:text-[#8a8d98] hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#2a2d35]"
+                }`}
+              >
+                <Car className="w-5 h-5" />
+              </button>
+            )}
 
             {/* Sales Ledger & Closed Deals */}
-            <button
-              onClick={() => {
-                setActiveDock("sales");
-                navigate("/sales");
-                toast.info("Opening Sales Agreements & Sold Transactions");
-              }}
-              title="Sold Inventory & Sales Agreements"
-              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
-                activeDock === "sales"
-                  ? "bg-[#d4ff32] text-black shadow-lg shadow-[#d4ff32]/30 scale-105"
-                  : "text-slate-400 dark:text-[#8a8d98] hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#2a2d35]"
-              }`}
-            >
-              <DollarSign className="w-5 h-5" />
-            </button>
+            {canAccess(role as AppRole, "sales", permissions) && (
+              <button
+                onClick={() => {
+                  setActiveDock("sales");
+                  navigate("/sales");
+                  toast.info("Opening Sales Agreements & Sold Transactions");
+                }}
+                title="Sold Inventory & Sales Agreements"
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                  activeDock === "sales"
+                    ? "bg-[#d4ff32] text-black shadow-lg shadow-[#d4ff32]/30 scale-105"
+                    : "text-slate-400 dark:text-[#8a8d98] hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#2a2d35]"
+                }`}
+              >
+                <DollarSign className="w-5 h-5" />
+              </button>
+            )}
 
             {/* Operations Breakdown Toggle */}
             <button
@@ -805,21 +831,23 @@ export function ERPInventoryDashboardView({
             </button>
 
             {/* Authority to Sell & Consignment */}
-            <button
-              onClick={() => {
-                setActiveDock("edit");
-                navigate("/authority-to-sell");
-                toast.info("Opening Authority to Sell Forms");
-              }}
-              title="Authority to Sell & Vehicle Consignment"
-              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
-                activeDock === "edit"
-                  ? "bg-[#d4ff32] text-black shadow-lg shadow-[#d4ff32]/30 scale-105"
-                  : "text-slate-400 dark:text-[#8a8d98] hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#2a2d35]"
-              }`}
-            >
-              <FileEdit className="w-5 h-5" />
-            </button>
+            {canAccess(role as AppRole, "authority-to-sell", permissions) && (
+              <button
+                onClick={() => {
+                  setActiveDock("edit");
+                  navigate("/authority-to-sell");
+                  toast.info("Opening Authority to Sell Forms");
+                }}
+                title="Authority to Sell & Vehicle Consignment"
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                  activeDock === "edit"
+                    ? "bg-[#d4ff32] text-black shadow-lg shadow-[#d4ff32]/30 scale-105"
+                    : "text-slate-400 dark:text-[#8a8d98] hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#2a2d35]"
+                }`}
+              >
+                <FileEdit className="w-5 h-5" />
+              </button>
+            )}
 
             {/* Active ERP Telemetry */}
             <button
@@ -841,15 +869,20 @@ export function ERPInventoryDashboardView({
             <button
               onClick={() => {
                 setActiveDock("documents");
-                const exportRows = filteredSales.map((s) => ({
-                  Sale_Date: s.sale_date || s.created_at,
-                  Vehicle: (s as any).vehicles ? `${(s as any).vehicles.year || ''} ${(s as any).vehicles.make} ${(s as any).vehicles.model}`.trim() : "Car",
-                  Sale_Price: s.sale_price,
-                  Cost_Price: (s as any).vehicles?.cost_price || "",
-                  Profit: Math.max(0, Number(s.sale_price || 0) - Number((s as any).vehicles?.cost_price || 0)),
-                  Representative: s.rep_name || "Showroom Direct Sales",
-                  Payment_Status: s.payment_status || "Paid",
-                }));
+                const exportRows = filteredSales.map((s) => {
+                  const cost = getSaleVehicleCost(s);
+                  const salePrice = Number(s.sale_price || 0);
+                  const linkedVeh = (s as any).vehicles || vehicles.find((v) => v.id === s.vehicle_id);
+                  return {
+                    Sale_Date: s.sale_date || s.created_at,
+                    Vehicle: linkedVeh ? `${linkedVeh.year || ''} ${linkedVeh.make} ${linkedVeh.model}`.trim() : "Car",
+                    Sale_Price: salePrice,
+                    Cost_Price: cost,
+                    Profit: salePrice - cost,
+                    Representative: s.rep_name || "Showroom Direct Sales",
+                    Payment_Status: s.payment_status || "Paid",
+                  };
+                });
                 exportToCSV(exportRows, `abuja_best_cars_sales_ledger_${selectedDateRange.toLowerCase().replace(/\s+/g, '_')}`);
                 toast.success(`Exported ${exportRows.length} sales & profit records to CSV`);
               }}
@@ -872,17 +905,23 @@ export function ERPInventoryDashboardView({
 
               {/* Card 1: Total Realized Revenue (Electric Lavender) */}
               <div
-                onClick={() => navigate("/sales")}
-                className="bg-white dark:bg-[#212328] border border-slate-200/90 dark:border-[#2e3138] rounded-3xl p-5 sm:p-6 flex flex-col justify-between shadow-sm dark:shadow-lg relative overflow-hidden group hover:border-[#9d84f6]/50 transition-all cursor-pointer"
-                title="Click to view Sales module"
+                onClick={() => canAccess(role as AppRole, "sales", permissions) && navigate("/sales")}
+                className={`bg-white dark:bg-[#212328] border border-slate-200/90 dark:border-[#2e3138] rounded-3xl p-5 sm:p-6 flex flex-col justify-between shadow-sm dark:shadow-lg relative overflow-hidden group transition-all ${
+                  canAccess(role as AppRole, "sales", permissions)
+                    ? "cursor-pointer hover:border-[#9d84f6]/50"
+                    : "cursor-default"
+                }`}
+                title={canAccess(role as AppRole, "sales", permissions) ? "Click to view Sales module" : undefined}
               >
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-slate-500 dark:text-[#8e919f]">Sales Revenue ({selectedDateRange})</span>
                   </div>
-                  <div className="w-7 h-7 rounded-full bg-slate-100 dark:bg-[#292c34] flex items-center justify-center text-slate-400 dark:text-[#7e818f] group-hover:text-slate-900 dark:group-hover:text-white group-hover:bg-slate-200 dark:group-hover:bg-[#343742] transition-colors">
-                    <ArrowUpRight className="w-4 h-4" />
-                  </div>
+                  {canAccess(role as AppRole, "sales", permissions) && (
+                    <div className="w-7 h-7 rounded-full bg-slate-100 dark:bg-[#292c34] flex items-center justify-center text-slate-400 dark:text-[#7e818f] group-hover:text-slate-900 dark:group-hover:text-white group-hover:bg-slate-200 dark:group-hover:bg-[#343742] transition-colors">
+                      <ArrowUpRight className="w-4 h-4" />
+                    </div>
+                  )}
                 </div>
 
                 {/* Slider Track with Striped Diagonal BG + Electric Purple Progress */}
@@ -915,15 +954,21 @@ export function ERPInventoryDashboardView({
 
               {/* Card 2: Fleet In Stock & Valuation (Electric Lime) */}
               <div
-                onClick={() => navigate("/vehicles")}
-                className="bg-white dark:bg-[#212328] border border-slate-200/90 dark:border-[#2e3138] rounded-3xl p-5 sm:p-6 flex flex-col justify-between shadow-sm dark:shadow-lg relative overflow-hidden group hover:border-[#a3e600] dark:hover:border-[#d4ff32]/50 transition-all cursor-pointer"
-                title="Click to view Showroom Vehicles"
+                onClick={() => canAccess(role as AppRole, "vehicles", permissions) && navigate("/vehicles")}
+                className={`bg-white dark:bg-[#212328] border border-slate-200/90 dark:border-[#2e3138] rounded-3xl p-5 sm:p-6 flex flex-col justify-between shadow-sm dark:shadow-lg relative overflow-hidden group transition-all ${
+                  canAccess(role as AppRole, "vehicles", permissions)
+                    ? "cursor-pointer hover:border-[#a3e600] dark:hover:border-[#d4ff32]/50"
+                    : "cursor-default"
+                }`}
+                title={canAccess(role as AppRole, "vehicles", permissions) ? "Click to view Showroom Vehicles" : undefined}
               >
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-xs font-semibold text-slate-500 dark:text-[#8e919f]">Fleet In Stock & Capacity</span>
-                  <div className="w-7 h-7 rounded-full bg-slate-100 dark:bg-[#292c34] flex items-center justify-center text-slate-400 dark:text-[#7e818f] group-hover:text-slate-900 dark:group-hover:text-white group-hover:bg-slate-200 dark:group-hover:bg-[#343742] transition-colors">
-                    <ArrowUpRight className="w-4 h-4" />
-                  </div>
+                  {canAccess(role as AppRole, "vehicles", permissions) && (
+                    <div className="w-7 h-7 rounded-full bg-slate-100 dark:bg-[#292c34] flex items-center justify-center text-slate-400 dark:text-[#7e818f] group-hover:text-slate-900 dark:group-hover:text-white group-hover:bg-slate-200 dark:group-hover:bg-[#343742] transition-colors">
+                      <ArrowUpRight className="w-4 h-4" />
+                    </div>
+                  )}
                 </div>
 
                 {/* Slider Track with Striped Diagonal BG + Electric Lime Progress */}
@@ -956,15 +1001,21 @@ export function ERPInventoryDashboardView({
 
               {/* Card 3: Realized Gross Profit & Margin (Tangerine Orange) */}
               <div
-                onClick={() => navigate("/sales")}
-                className="bg-white dark:bg-[#212328] border border-slate-200/90 dark:border-[#2e3138] rounded-3xl p-5 sm:p-6 flex flex-col justify-between shadow-sm dark:shadow-lg relative overflow-hidden group hover:border-[#ff8544]/50 transition-all cursor-pointer"
-                title="Click to view Sales and Profit Ledger"
+                onClick={() => canAccess(role as AppRole, "sales", permissions) && navigate("/sales")}
+                className={`bg-white dark:bg-[#212328] border border-slate-200/90 dark:border-[#2e3138] rounded-3xl p-5 sm:p-6 flex flex-col justify-between shadow-sm dark:shadow-lg relative overflow-hidden group transition-all ${
+                  canAccess(role as AppRole, "sales", permissions)
+                    ? "cursor-pointer hover:border-[#ff8544]/50"
+                    : "cursor-default"
+                }`}
+                title={canAccess(role as AppRole, "sales", permissions) ? "Click to view Sales and Profit Ledger" : undefined}
               >
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-xs font-semibold text-slate-500 dark:text-[#8e919f]">Realized Gross Profit</span>
-                  <div className="w-7 h-7 rounded-full bg-slate-100 dark:bg-[#292c34] flex items-center justify-center text-slate-400 dark:text-[#7e818f] group-hover:text-slate-900 dark:group-hover:text-white group-hover:bg-slate-200 dark:group-hover:bg-[#343742] transition-colors">
-                    <ArrowUpRight className="w-4 h-4" />
-                  </div>
+                  {canAccess(role as AppRole, "sales", permissions) && (
+                    <div className="w-7 h-7 rounded-full bg-slate-100 dark:bg-[#292c34] flex items-center justify-center text-slate-400 dark:text-[#7e818f] group-hover:text-slate-900 dark:group-hover:text-white group-hover:bg-slate-200 dark:group-hover:bg-[#343742] transition-colors">
+                      <ArrowUpRight className="w-4 h-4" />
+                    </div>
+                  )}
                 </div>
 
                 {/* Slider Track with Striped Diagonal BG + Tangerine Orange Progress */}
@@ -978,7 +1029,7 @@ export function ERPInventoryDashboardView({
                     />
                     <div
                       className="h-full rounded-full bg-gradient-to-r from-[#e55a1d] to-[#ff8544] relative flex items-center justify-end shadow-md shadow-[#ff8544]/30 transition-all duration-700"
-                      style={{ width: `${Math.max(15, Math.min(100, grossProfitMarginPercent * 3.5))}%` }}
+                      style={{ width: `${Math.max(5, Math.min(100, grossProfitMarginPercent))}%` }}
                     >
                       <div className="w-3.5 h-3.5 rounded-full bg-white shadow-md border-2 border-[#ff8544] translate-x-1" />
                     </div>
@@ -989,7 +1040,10 @@ export function ERPInventoryDashboardView({
                   <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
                     {formatMoney(totalGrossProfit)}
                   </span>
-                  <span className="text-xs font-medium text-slate-500 dark:text-[#8e919f]">
+                  <span
+                    className="text-xs font-medium text-slate-500 dark:text-[#8e919f]"
+                    title={`Revenue: ${formatMoney(totalSalesRevenue)} | Vehicle Cost: ${formatMoney(soldVehiclesCost)} | Profit: ${formatMoney(totalGrossProfit)}`}
+                  >
                     {soldVehiclesCount} sold • {grossProfitMarginPercent}% Margin
                   </span>
                 </div>

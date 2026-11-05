@@ -6,7 +6,7 @@ import { logAction } from "@/lib/logger";
 type AuthState = {
   user: User | null;
   profile: any | null;
-  role: "admin" | "admin" | "sales" | "mechanic" | null;
+  role: "admin" | "sales" | "mechanic" | string | null;
   isLoading: boolean;
   refreshProfile: () => Promise<void>;
 };
@@ -28,7 +28,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return {
           user: parsed.user || null,
           profile: parsed.profile || null,
-          role: parsed.role || "admin",
+          role: parsed.role ?? null,
           isLoading: !parsed.user,
           refreshProfile: async () => {},
         };
@@ -52,7 +52,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       ]);
 
       const profile = profileResult.data || null;
-      const role = roleResult.data?.role ?? "admin";
+      const role = roleResult.data?.role ?? null;
 
       try {
         localStorage.setItem("lamido_auth_cache", JSON.stringify({ user: state.user, profile, role }));
@@ -66,7 +66,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }));
     } catch (err) {
       console.warn("Could not load profile/role extras:", err);
-      setState((prev) => ({ ...prev, isLoading: false, role: "admin" }));
+      setState((prev) => ({ ...prev, isLoading: false, role: null }));
     }
   };
 

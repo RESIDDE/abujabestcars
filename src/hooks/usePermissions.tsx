@@ -39,11 +39,22 @@ async function fetchPermissions(): Promise<PermissionsMap> {
     };
   }
 
-  return {
-    admin:    migrateRole(fetched.admin,    DEFAULT_PERMISSIONS.admin)    as any,
-    sales:    migrateRole(fetched.sales,    DEFAULT_PERMISSIONS.sales)    as any,
-    mechanic: migrateRole(fetched.mechanic, DEFAULT_PERMISSIONS.mechanic) as any,
-  };
+  const result: Record<string, { view: any[]; create: any[]; edit: any[] }> = {};
+
+  // First copy all fetched roles migrated
+  for (const [key, roleVal] of Object.entries(fetched)) {
+    const defaultVal = (DEFAULT_PERMISSIONS as any)[key] ?? { view: [], create: [], edit: [] };
+    result[key] = migrateRole(roleVal as any, defaultVal);
+  }
+
+  // Ensure default roles exist if not in fetched
+  for (const [key, defaultVal] of Object.entries(DEFAULT_PERMISSIONS)) {
+    if (!result[key]) {
+      result[key] = defaultVal;
+    }
+  }
+
+  return result as PermissionsMap;
 }
 
 /**

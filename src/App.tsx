@@ -4,7 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "@/components/AppLayout";
-import { RoleGuard } from "@/components/RoleGuard";
+import { RoleGuard, AdminGuard } from "@/components/RoleGuard";
 import { useAuth } from "@/hooks/useAuth";
 import { PermissionsRealtimeSync } from "@/hooks/usePermissions";
 import { ThemeProvider } from "next-themes";
@@ -105,9 +105,9 @@ function AppRoutes() {
                 <Route path="/sales-agreement"    element={<RoleGuard page="authority-to-sell"><SalesAgreement /></RoleGuard>} />
                 <Route path="/performance-quotes" element={<RoleGuard page="performance-quotes"><PerformanceQuotes /></RoleGuard>} />
                 <Route path="/expenses"          element={<RoleGuard page="expenses"><Expenses /></RoleGuard>} />
-                <Route path="/report"            element={<AdvancedReport />} />
-                {/* Settings — only super_admin can see; RoleGuard handled internally */}
-                <Route path="/settings"          element={<Settings />} />
+                <Route path="/report"            element={<RoleGuard page="dashboard"><AdvancedReport /></RoleGuard>} />
+                {/* Settings — only admin can see */}
+                <Route path="/settings"          element={<AdminGuard><Settings /></AdminGuard>} />
                 <Route path="/unauthorized"      element={<Unauthorized />} />
                 <Route path="*"                  element={<NotFound />} />
               </Routes>

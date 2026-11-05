@@ -53,7 +53,7 @@ export const DEFAULT_PERMISSIONS: PermissionsMap = {
 /**
  * Returns true if the given role can VIEW the given page.
  * - null role (pending) = no access
- * - super_admin = always full access
+ * - admin / super_admin = always full access
  * - others = check permissions map
  */
 export function canAccess(
@@ -61,43 +61,58 @@ export function canAccess(
   page: PageKey,
   permissions: PermissionsMap = DEFAULT_PERMISSIONS
 ): boolean {
-  return true; // All users have full access
+  if (!role) return false;
+  if (role === "admin" || (role as string) === "super_admin") return true;
+  const rolePerms = (permissions as any)?.[role];
+  if (!rolePerms) return false;
+  return Boolean((rolePerms.view ?? []).includes(page));
 }
 
 /**
  * Returns true if the given role can CREATE (ADD) on the given page.
  * - null role (pending) = no access
- * - super_admin = always full access
+ * - admin / super_admin = always full access
  */
 export function canCreate(
   role: AppRole | null,
   page: PageKey,
   permissions: PermissionsMap = DEFAULT_PERMISSIONS
 ): boolean {
-  return true; // All users have full access
+  if (!role) return false;
+  if (role === "admin" || (role as string) === "super_admin") return true;
+  const rolePerms = (permissions as any)?.[role];
+  if (!rolePerms) return false;
+  return Boolean((rolePerms.create ?? []).includes(page));
 }
 
 /**
  * Returns true if the given role can EDIT on the given page.
  * - null role (pending) = no access
- * - super_admin = always full access
+ * - admin / super_admin = always full access
  */
 export function canEdit(
   role: AppRole | null,
   page: PageKey,
   permissions: PermissionsMap = DEFAULT_PERMISSIONS
 ): boolean {
-  return true; // All users have full access
+  if (!role) return false;
+  if (role === "admin" || (role as string) === "super_admin") return true;
+  const rolePerms = (permissions as any)?.[role];
+  if (!rolePerms) return false;
+  return Boolean((rolePerms.edit ?? []).includes(page));
 }
 
 /**
  * Returns the list of pages accessible (viewable) by this role.
  * - null role (pending) = empty list
- * - super_admin = all pages
+ * - admin / super_admin = all pages
  */
 export function getAccessiblePages(
   role: AppRole | null,
   permissions: PermissionsMap = DEFAULT_PERMISSIONS
 ): PageKey[] {
-  return ADMIN_PAGES; // All users see all pages
+  if (!role) return [];
+  if (role === "admin" || (role as string) === "super_admin") return ADMIN_PAGES;
+  const rolePerms = (permissions as any)?.[role];
+  return rolePerms?.view ?? [];
 }

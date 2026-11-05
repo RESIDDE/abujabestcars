@@ -3,13 +3,16 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
+import { canAccess, type AppRole } from "@/lib/permissions";
 import { supabase } from "@/integrations/supabase/client";
 import { Zap, Search, MessageSquare, Bell } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate, useLocation } from "react-router-dom";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
-  const { user, profile } = useAuth();
+  const { user, profile, role } = useAuth();
+  const { permissions } = usePermissions();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
@@ -28,6 +31,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   };
 
   const displayName = profile?.display_name || user?.email?.split("@")[0] || "Admin";
+
+  const canViewVehicles = canAccess(role as AppRole | null, "vehicles", permissions);
+  const canViewInquiries = canAccess(role as AppRole | null, "inquiries", permissions);
+  const canViewSales = canAccess(role as AppRole | null, "sales", permissions);
 
   return (
     <SidebarProvider>
@@ -52,18 +59,20 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
 
             {/* Pill Search Input */}
-            <form onSubmit={handleSearchSubmit} className="relative flex-1 max-w-md mx-2 hidden sm:block">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
-                <Search className="w-4 h-4 text-slate-400 dark:text-[#8a8d98]" />
-              </div>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Start Search Here..."
-                className="w-full h-10 bg-slate-100 dark:bg-[#24262c] text-xs text-slate-900 dark:text-[#f0f1f5] placeholder:text-slate-400 dark:placeholder-[#7d808c] pl-11 pr-4 rounded-full border border-slate-200 dark:border-transparent focus:border-slate-300 dark:focus:border-[#424652] focus:bg-white dark:focus:bg-[#282a32] focus:outline-none transition-all shadow-inner"
-              />
-            </form>
+            {canViewVehicles && (
+              <form onSubmit={handleSearchSubmit} className="relative flex-1 max-w-md mx-2 hidden sm:block">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
+                  <Search className="w-4 h-4 text-slate-400 dark:text-[#8a8d98]" />
+                </div>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Start Search Here..."
+                  className="w-full h-10 bg-slate-100 dark:bg-[#24262c] text-xs text-slate-900 dark:text-[#f0f1f5] placeholder:text-slate-400 dark:placeholder-[#7d808c] pl-11 pr-4 rounded-full border border-slate-200 dark:border-transparent focus:border-slate-300 dark:focus:border-[#424652] focus:bg-white dark:focus:bg-[#282a32] focus:outline-none transition-all shadow-inner"
+                />
+              </form>
+            )}
 
             {/* Right: Currency, Inquiries, Notifications, ThemeToggle, Gold Ring Profile Avatar */}
             <div className="flex items-center gap-2.5 sm:gap-3 ml-auto shrink-0">
@@ -77,23 +86,27 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </div>
 
               {/* Inquiries Chat */}
-              <button
-                onClick={() => navigate("/inquiries")}
-                title="Customer Inquiries"
-                className="w-9 h-9 rounded-full bg-slate-100 dark:bg-[#24262c] border border-slate-200 dark:border-[#31343c] hover:border-slate-300 dark:hover:border-[#434652] flex items-center justify-center text-slate-600 dark:text-[#c2c5d1] hover:text-slate-900 dark:hover:text-white transition-colors relative shadow-sm"
-              >
-                <MessageSquare className="w-4 h-4" />
-              </button>
+              {canViewInquiries && (
+                <button
+                  onClick={() => navigate("/inquiries")}
+                  title="Customer Inquiries"
+                  className="w-9 h-9 rounded-full bg-slate-100 dark:bg-[#24262c] border border-slate-200 dark:border-[#31343c] hover:border-slate-300 dark:hover:border-[#434652] flex items-center justify-center text-slate-600 dark:text-[#c2c5d1] hover:text-slate-900 dark:hover:text-white transition-colors relative shadow-sm"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                </button>
+              )}
 
               {/* Notifications */}
-              <button
-                onClick={() => navigate("/sales")}
-                title="Sales Transactions"
-                className="w-9 h-9 rounded-full bg-slate-100 dark:bg-[#24262c] border border-slate-200 dark:border-[#31343c] hover:border-slate-300 dark:hover:border-[#434652] flex items-center justify-center text-slate-600 dark:text-[#c2c5d1] hover:text-slate-900 dark:hover:text-white transition-colors relative shadow-sm"
-              >
-                <Bell className="w-4 h-4" />
-                <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#ef4444] ring-2 ring-slate-100 dark:ring-[#24262c]" />
-              </button>
+              {canViewSales && (
+                <button
+                  onClick={() => navigate("/sales")}
+                  title="Sales Transactions"
+                  className="w-9 h-9 rounded-full bg-slate-100 dark:bg-[#24262c] border border-slate-200 dark:border-[#31343c] hover:border-slate-300 dark:hover:border-[#434652] flex items-center justify-center text-slate-600 dark:text-[#c2c5d1] hover:text-slate-900 dark:hover:text-white transition-colors relative shadow-sm"
+                >
+                  <Bell className="w-4 h-4" />
+                  <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#ef4444] ring-2 ring-slate-100 dark:ring-[#24262c]" />
+                </button>
+              )}
 
               {/* Theme Toggle */}
               <ThemeToggle />

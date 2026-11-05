@@ -194,7 +194,7 @@ export default function Dashboard() {
   const { data: sales = [], isLoading: loadingS } = useQuery({
     queryKey: ["dash-sales"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("sales").select("*, vehicles(make, model, cost_price)");
+      const { data, error } = await supabase.from("sales").select("*, vehicles(id, make, model, year, cost_price), sale_vehicles(id, price, vehicle_id, vehicles(id, make, model, year, cost_price))");
       if (error) throw error;
       return data;
     },
@@ -246,7 +246,10 @@ export default function Dashboard() {
   const totalRevenue = totalSalesRevenue;
 
   const totalSalesProfit = sales.reduce((sum, s) => {
-    const cost = Number((s as any).vehicles?.cost_price || 0);
+    const saleVehs = (s.sale_vehicles || []).map((sv: any) => sv.vehicles).filter(Boolean);
+    const cost = saleVehs.length > 0
+      ? saleVehs.reduce((cSum: number, v: any) => cSum + Number(v.cost_price || 0), 0)
+      : Number((s as any).vehicles?.cost_price || 0);
     const sale = Number(s.sale_price || 0);
     return sum + (sale - cost);
   }, 0);
@@ -281,7 +284,10 @@ export default function Dashboard() {
 
   const profitMarginData = useMemo(() => {
     return (sales || []).slice(0, 6).map((s: any) => {
-      const cost = Number(s.vehicles?.cost_price || 0);
+      const saleVehs = (s.sale_vehicles || []).map((sv: any) => sv.vehicles).filter(Boolean);
+      const cost = saleVehs.length > 0
+        ? saleVehs.reduce((cSum: number, v: any) => cSum + Number(v.cost_price || 0), 0)
+        : Number(s.vehicles?.cost_price || 0);
       const sale = Number(s.sale_price || 0);
       const profit = Math.max(0, sale - cost);
       const name = s.vehicles ? `${s.vehicles.make} ${s.vehicles.model}` : "Sale";
@@ -406,74 +412,84 @@ export default function Dashboard() {
           <div className="lg:col-span-8 grid grid-cols-1 md:grid-cols-6 gap-4 md:gap-5">
 
             {/* Total Revenue — hero card */}
-            <Link to="/sales" className="md:col-span-6 group">
-              <div className="bento-card p-6 sm:p-8 flex flex-col justify-between min-h-[160px] group-hover:scale-[1.01]">
-                <div className="flex justify-between items-start z-10 relative">
-                  <div className="p-3 rounded-2xl bg-primary/10 text-primary">
-                    <DollarSign className="h-6 w-6" />
+            {canAccess(role as AppRole, "sales", permissions) && (
+              <Link to="/sales" className="md:col-span-6 group">
+                <div className="bento-card p-6 sm:p-8 flex flex-col justify-between min-h-[160px] group-hover:scale-[1.01]">
+                  <div className="flex justify-between items-start z-10 relative">
+                    <div className="p-3 rounded-2xl bg-primary/10 text-primary">
+                      <DollarSign className="h-6 w-6" />
+                    </div>
+                    <div className="flex items-center gap-1 text-xs font-semibold text-muted-foreground px-2.5 py-1 rounded-full bg-muted border border-border/60">
+                      <TrendingUp className="w-3 h-3 text-emerald-500" /> Total Revenue
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1 text-xs font-semibold text-muted-foreground px-2.5 py-1 rounded-full bg-muted border border-border/60">
-                    <TrendingUp className="w-3 h-3 text-emerald-500" /> Total Revenue
+                  <div className="mt-6 z-10 relative">
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5">Company Lifetime Revenue</p>
+                    <h2 className="text-3xl sm:text-4xl font-black text-foreground tracking-tight">₦{totalRevenue.toLocaleString()}</h2>
                   </div>
                 </div>
-                <div className="mt-6 z-10 relative">
-                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1.5">Company Lifetime Revenue</p>
-                  <h2 className="text-3xl sm:text-4xl font-black text-foreground tracking-tight">₦{totalRevenue.toLocaleString()}</h2>
-                </div>
-              </div>
-            </Link>
+              </Link>
+            )}
 
             {/* Sales Revenue */}
-            <Link to="/sales" className="md:col-span-3 group">
-              <div className="bento-card p-5 sm:p-6 flex flex-col justify-between min-h-[130px] group-hover:scale-[1.02]">
-                <div className="p-2.5 w-fit rounded-xl mb-4 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                  <DollarSign className="h-5 w-5" />
+            {canAccess(role as AppRole, "sales", permissions) && (
+              <Link to="/sales" className="md:col-span-3 group">
+                <div className="bento-card p-5 sm:p-6 flex flex-col justify-between min-h-[130px] group-hover:scale-[1.02]">
+                  <div className="p-2.5 w-fit rounded-xl mb-4 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                    <DollarSign className="h-5 w-5" />
+                  </div>
+                  <div className="z-10 relative">
+                    <h2 className="text-xl sm:text-2xl font-black text-foreground">₦{totalSalesRevenue.toLocaleString()}</h2>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1.5 font-bold">Sales Revenue</p>
+                  </div>
                 </div>
-                <div className="z-10 relative">
-                  <h2 className="text-xl sm:text-2xl font-black text-foreground">₦{totalSalesRevenue.toLocaleString()}</h2>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1.5 font-bold">Sales Revenue</p>
-                </div>
-              </div>
-            </Link>
+              </Link>
+            )}
 
             {/* Total Customers */}
-            <Link to="/customers" className="md:col-span-3 group">
-              <div className="bento-card p-5 sm:p-6 flex flex-col justify-between min-h-[130px] group-hover:scale-[1.02]">
-                <div className="p-2.5 w-fit rounded-xl mb-4 bg-sky-500/10 text-sky-600 dark:text-sky-400">
-                  <Users className="h-5 w-5" />
+            {canAccess(role as AppRole, "customers", permissions) && (
+              <Link to="/customers" className="md:col-span-3 group">
+                <div className="bento-card p-5 sm:p-6 flex flex-col justify-between min-h-[130px] group-hover:scale-[1.02]">
+                  <div className="p-2.5 w-fit rounded-xl mb-4 bg-sky-500/10 text-sky-600 dark:text-sky-400">
+                    <Users className="h-5 w-5" />
+                  </div>
+                  <div className="z-10 relative">
+                    <h2 className="text-xl sm:text-2xl font-black text-foreground">{customers.length}</h2>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1.5 font-bold">Total Customers</p>
+                  </div>
                 </div>
-                <div className="z-10 relative">
-                  <h2 className="text-xl sm:text-2xl font-black text-foreground">{customers.length}</h2>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1.5 font-bold">Total Customers</p>
-                </div>
-              </div>
-            </Link>
+              </Link>
+            )}
 
             {/* Inquiries */}
-            <Link to="/inquiries" className="md:col-span-3 group">
-              <div className="bento-card p-5 flex flex-col justify-between min-h-[130px] group-hover:scale-[1.02]">
-                <div className="p-2 w-fit rounded-xl mb-3 bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                  <Search className="h-5 w-5" />
+            {canAccess(role as AppRole, "inquiries", permissions) && (
+              <Link to="/inquiries" className="md:col-span-3 group">
+                <div className="bento-card p-5 flex flex-col justify-between min-h-[130px] group-hover:scale-[1.02]">
+                  <div className="p-2 w-fit rounded-xl mb-3 bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                    <Search className="h-5 w-5" />
+                  </div>
+                  <div className="z-10 relative">
+                    <h2 className="text-xl font-black text-foreground">{pendingInquiriesCount}</h2>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1 font-bold">Inquiries</p>
+                  </div>
                 </div>
-                <div className="z-10 relative">
-                  <h2 className="text-xl font-black text-foreground">{pendingInquiriesCount}</h2>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1 font-bold">Inquiries</p>
-                </div>
-              </div>
-            </Link>
+              </Link>
+            )}
 
             {/* Perf. Quotes */}
-            <Link to="/performance-quotes" className="md:col-span-3 group">
-              <div className="bento-card p-5 flex flex-col justify-between min-h-[130px] group-hover:scale-[1.02]">
-                <div className="p-2 w-fit rounded-xl mb-3 bg-violet-500/10 text-violet-600 dark:text-violet-400">
-                  <FileSignature className="h-5 w-5" />
+            {canAccess(role as AppRole, "performance-quotes", permissions) && (
+              <Link to="/performance-quotes" className="md:col-span-3 group">
+                <div className="bento-card p-5 flex flex-col justify-between min-h-[130px] group-hover:scale-[1.02]">
+                  <div className="p-2 w-fit rounded-xl mb-3 bg-violet-500/10 text-violet-600 dark:text-violet-400">
+                    <FileSignature className="h-5 w-5" />
+                  </div>
+                  <div className="z-10 relative">
+                    <h2 className="text-xl font-black text-foreground">{performanceQuotes.length}</h2>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1 font-bold">Perf. Quotes</p>
+                  </div>
                 </div>
-                <div className="z-10 relative">
-                  <h2 className="text-xl font-black text-foreground">{performanceQuotes.length}</h2>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1 font-bold">Perf. Quotes</p>
-                </div>
-              </div>
-            </Link>
+              </Link>
+            )}
 
             {/* Revenue Growth Chart */}
             <div className="bento-card md:col-span-4 p-6 flex flex-col min-h-[350px]">
@@ -598,11 +614,10 @@ export default function Dashboard() {
             {/* Quick Stats Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {[
-                { to: "/vehicles",        Icon: Car,       count: vehicles.length,       label: "Vehicles Stock" },
-                { to: "/resale-vehicles", Icon: Car,       count: resaleVehicles.length,  label: "Resale Stock" },
-                { to: "/customers",       Icon: Users,     count: customers.length,       label: "Customers" },
-                { to: "/sales",           Icon: DollarSign,count: sales.length,           label: "Sales" },
-              ].map(({ to, Icon, count, label }) => (
+                { to: "/vehicles",  Icon: Car,        count: vehicles.length,  label: "Vehicles Stock", page: "vehicles" as const },
+                { to: "/customers", Icon: Users,      count: customers.length, label: "Customers",      page: "customers" as const },
+                { to: "/sales",     Icon: DollarSign, count: sales.length,     label: "Sales",          page: "sales" as const },
+              ].filter((item) => canAccess(role as AppRole, item.page, permissions)).map(({ to, Icon, count, label }) => (
                 <Link key={to} to={to} className="group transition-all duration-300 hover:scale-[1.03]">
                   <div className="bento-card p-5 flex flex-col h-full">
                     <div className="p-2.5 w-fit rounded-xl mb-3 group-hover:scale-110 transition-transform bg-primary/10 text-primary">
@@ -615,79 +630,86 @@ export default function Dashboard() {
               ))}
 
               {/* Expenses — full width */}
-              <Link to="/expenses" className="col-span-2 group transition-all duration-300 hover:scale-[1.01]">
-                <div className="bento-card p-5 flex flex-col">
-                  <div className="p-2.5 w-fit rounded-xl mb-3 group-hover:scale-110 transition-transform bg-rose-500/10 text-rose-500">
-                    <Receipt className="h-5 w-5" />
+              {canAccess(role as AppRole, "expenses", permissions) && (
+                <Link to="/expenses" className="col-span-2 group transition-all duration-300 hover:scale-[1.01]">
+                  <div className="bento-card p-5 flex flex-col">
+                    <div className="p-2.5 w-fit rounded-xl mb-3 group-hover:scale-110 transition-transform bg-rose-500/10 text-rose-500">
+                      <Receipt className="h-5 w-5" />
+                    </div>
+                    <h3 className="text-2xl font-black text-foreground">{expenses.length}</h3>
+                    <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider mt-0.5">Company Expenses Logged</p>
                   </div>
-                  <h3 className="text-2xl font-black text-foreground">{expenses.length}</h3>
-                  <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider mt-0.5">Company Expenses Logged</p>
-                </div>
-              </Link>
+                </Link>
+              )}
             </div>
 
             {/* Recent Imports */}
-            <div className="bento-card flex flex-col overflow-hidden">
-              <div className="p-5 flex items-center justify-between border-b border-border/60 bg-muted/20">
-                <h3 className="font-semibold text-foreground">Recent Imports</h3>
+            {canAccess(role as AppRole, "vehicles", permissions) && (
+              <div className="bento-card flex flex-col overflow-hidden">
+                <div className="p-5 flex items-center justify-between border-b border-border/60 bg-muted/20">
+                  <h3 className="font-semibold text-foreground">Recent Imports</h3>
+                </div>
+                <div className="p-3">
+                  {filteredVehicles.length === 0 ? (
+                    <p className="text-sm text-center text-muted-foreground py-8">Inventory is empty.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {filteredVehicles.map((v) => (
+                        <Link
+                          key={v.id}
+                          to={`/vehicles/${v.id}`}
+                          className="flex items-center gap-3 rounded-xl p-3 transition-all group hover:bg-muted/50 border border-transparent hover:border-border/60"
+                        >
+                          <div className="p-2 rounded-xl shrink-0 bg-muted text-muted-foreground group-hover:text-primary group-hover:bg-primary/10 transition-colors">
+                            <Car className="h-4 w-4" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-sm text-foreground/90 truncate">{v.year} {v.make} {v.model}</p>
+                            <p className="text-[11px] text-muted-foreground uppercase">{v.status || "In Stock"}</p>
+                          </div>
+                          <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all translate-x-1 group-hover:translate-x-0" />
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="p-3">
-                {filteredVehicles.length === 0 ? (
-                  <p className="text-sm text-center text-muted-foreground py-8">Inventory is empty.</p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {filteredVehicles.map((v) => (
-                      <Link
-                        key={v.id}
-                        to={`/vehicles/${v.id}`}
-                        className="flex items-center gap-3 rounded-xl p-3 transition-all group hover:bg-muted/50 border border-transparent hover:border-border/60"
-                      >
-                        <div className="p-2 rounded-xl shrink-0 bg-muted text-muted-foreground group-hover:text-primary group-hover:bg-primary/10 transition-colors">
-                          <Car className="h-4 w-4" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-sm text-foreground/90 truncate">{v.year} {v.make} {v.model}</p>
-                          <p className="text-[11px] text-muted-foreground uppercase">{v.status || "In Stock"}</p>
-                        </div>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all translate-x-1 group-hover:translate-x-0" />
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+            )}
 
             {/* Recent Inquiries */}
-            <div className="bento-card flex flex-col overflow-hidden">
-              <div className="p-5 flex items-center justify-between border-b border-border/60 bg-muted/20">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500">
-                    <Search className="h-4 w-4" />
+            {canAccess(role as AppRole, "inquiries", permissions) && (
+              <div className="bento-card flex flex-col overflow-hidden">
+                <div className="p-5 flex items-center justify-between border-b border-border/60 bg-muted/20">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500">
+                      <Search className="h-4 w-4" />
+                    </div>
+                    <h3 className="font-semibold text-foreground">Recent Inquiries</h3>
                   </div>
-                  <h3 className="font-semibold text-foreground">Recent Inquiries</h3>
+                  <Link to="/inquiries" className="text-xs text-primary hover:underline font-bold">View All</Link>
                 </div>
-                <Link to="/inquiries" className="text-xs text-primary hover:underline font-bold">View All</Link>
-              </div>
-              <div className="p-3">
-                {inquiries.length === 0 ? (
-                  <p className="text-sm text-center text-muted-foreground py-8">No inquiries found.</p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {inquiries.slice(0, 3).map((inq: any) => (
-                      <div key={inq.id} className="flex flex-col gap-1 rounded-xl p-3 bg-muted/30 border border-border/60">
-                        <div className="flex justify-between items-start">
-                          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${inq.status === 'pending' ? 'text-amber-600 dark:text-amber-400 bg-amber-500/10' : 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'}`}>
-                            {inq.status}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground">{new Date(inq.created_at).toLocaleDateString()}</span>
+                <div className="p-3">
+                  {inquiries.length === 0 ? (
+                    <p className="text-sm text-center text-muted-foreground py-8">No inquiries found.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {inquiries.slice(0, 3).map((inq: any) => (
+                        <div key={inq.id} className="flex flex-col gap-1 rounded-xl p-3 bg-muted/30 border border-border/60">
+                          <div className="flex justify-between items-start">
+                            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${inq.status === 'pending' ? 'text-amber-600 dark:text-amber-400 bg-amber-500/10' : 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'}`}>
+                              {inq.status}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground">{new Date(inq.created_at).toLocaleDateString()}</span>
+                          </div>
+                          <p className="text-sm font-semibold text-foreground">{inq.customer_name}</p>
+                          <p className="text-xs text-muted-foreground line-clamp-1">{inq.message || inq.vehicle_interest || "No message"}</p>
                         </div>
-                        <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{inq.message}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Sourced Companies Inventory */}
             <div className="bento-card flex flex-col overflow-hidden">
