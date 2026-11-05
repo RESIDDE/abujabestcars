@@ -1,14 +1,25 @@
 import React, { useRef, useState, useEffect, forwardRef } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Printer, Download, FileText, ScrollText, QrCode, CheckCircle2, PenLine } from "lucide-react";
-import logo from "@/assets/logo.png";
-import { PrintHeader, PrintWatermark, BRAND_BADGE, BRAND_DARK, BRAND_PINK, BRAND_RED } from "@/components/PrintHeader";
+import { ArrowLeft, Printer, Download, QrCode, CheckCircle2 } from "lucide-react";
+import {
+  PrintWatermark,
+  ModernLetterhead,
+  PaymentDetailsPanel,
+  MetaLabel,
+  ModernSignSlot,
+  titleCase,
+  COMPANY,
+  BRAND_RED,
+  INK,
+  RULE,
+  ROW_RULE,
+  POSITIVE,
+  MODERN_FONT,
+} from "@/components/PrintHeader";
 import { numberToWords } from "@/lib/numberToWords";
 import { supabase } from "@/integrations/supabase/client";
 import { QrSignDialog } from "@/lib/qrHelpers";
 import { toast } from "sonner";
-
-export type ReceiptType = "registered" | "non_registered";
 
 export interface SalePrintPreviewProps {
   sale: any;
@@ -22,289 +33,26 @@ export interface SalePrintPreviewProps {
 }
 
 const RED = BRAND_RED;
-const BADGE = BRAND_BADGE;
-const PINK = BRAND_PINK;
-const DARK = BRAND_DARK;
 
-/* ---------- Shared UI Pieces ---------- */
+/* ---------- Invoice / Payment Receipt ---------- */
 
-function Line({ label, value, minWidth }: { label: string; value?: React.ReactNode; minWidth?: number }) {
-  return (
-    <div style={{ display: "flex", alignItems: "flex-end", gap: 6, fontSize: 13, fontFamily: "Georgia, serif", minWidth }}>
-      <span style={{ whiteSpace: "nowrap" }}>{label}</span>
-      <span style={{ flex: 1, borderBottom: "1px solid #333", minHeight: 18, paddingLeft: 4, fontFamily: "Arial, sans-serif", fontWeight: 600, fontSize: 12.5 }}>
-        {value}
-      </span>
-    </div>
-  );
-}
+const exactPrint = { WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" } as React.CSSProperties;
 
-function SignBox({
-  label,
-  signature,
-  date,
-  align = "left",
-  onSignClick,
-  isSigningMode,
-}: {
-  label: string;
-  signature?: string | null;
-  date?: string | null;
-  align?: "left" | "right" | "center";
-  onSignClick?: () => void;
-  isSigningMode?: boolean;
-}) {
-  return (
-    <div
-      style={{
-        textAlign: align,
-        fontFamily: "Georgia, serif",
-        fontStyle: "italic",
-        fontSize: 13,
-        minWidth: 190,
-      }}
-    >
-      <div
-        style={{
-          height: 48,
-          display: "flex",
-          alignItems: "flex-end",
-          justifyContent: align === "right" ? "flex-end" : align === "center" ? "center" : "flex-start",
-          paddingBottom: 2,
-        }}
-      >
-        {signature ? (
-          <img
-            src={signature}
-            alt={label}
-            style={{
-              maxHeight: 46,
-              maxWidth: 180,
-              objectFit: "contain",
-              filter: "brightness(0)",
-              WebkitFilter: "brightness(0)",
-              WebkitPrintColorAdjust: "exact",
-              printColorAdjust: "exact",
-            } as React.CSSProperties}
-          />
-        ) : isSigningMode && onSignClick ? (
-          <button
-            type="button"
-            onClick={onSignClick}
-            className="animate-pulse"
-            style={{
-              height: 38,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-              border: "1.5px dashed #d9342b",
-              borderRadius: 8,
-              padding: "0 12px",
-              background: "#fff5f5",
-              color: "#d9342b",
-              fontWeight: 700,
-              fontSize: 11,
-              fontFamily: "Arial, sans-serif",
-              fontStyle: "normal",
-              cursor: "pointer",
-            }}
-          >
-            <PenLine style={{ width: 13, height: 13 }} /> Tap to Sign Here
-          </button>
-        ) : null}
-      </div>
-      <div
-        style={{
-          borderTop: "1px solid #333",
-          width: 190,
-          marginLeft: align === "right" ? "auto" : 0,
-          paddingTop: 3,
-        }}
-      >
-        <span>{label}</span>
-        {date && (
-          <div style={{ fontSize: 10, color: "#555", fontStyle: "normal", marginTop: 1 }}>
-            {new Date(date).toLocaleDateString("en-GB")}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Template 1: Cash/Credit Invoice (registered vehicle) ---------- */
-
-function CashCreditInvoice(props: any) {
+function ModernInvoice(props: any) {
   const {
-    receiptNo,
+    docNumber,
     date,
     customer,
     rows,
-    total,
-    amountWords,
-    isPaymentReceipt,
-    paymentAmount,
-    balance,
-    customerSignature,
-    customerSignatureDate,
-    repSignature,
-    repSignatureDate,
-    onSignClick,
-    isSigningMode,
-  } = props;
-
-  const d = new Date(date);
-  const naira = Math.floor(total);
-  const kobo = String(Math.round((total - naira) * 100)).padStart(2, "0");
-  const fmt = (n: number) => Math.floor(n).toLocaleString();
-  const emptyRows = Math.max(0, 9 - rows.length);
-
-  const cell: React.CSSProperties = { border: "1px solid #222", padding: "4px 6px", fontSize: 12, verticalAlign: "middle", height: 30 };
-  const th: React.CSSProperties = { background: DARK, color: "#fff", fontFamily: "Arial, sans-serif", fontWeight: 600, fontSize: 13, padding: "6px", letterSpacing: 1, WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" } as React.CSSProperties;
-
-  return (
-    <>
-      <PrintHeader />
-
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 20 }}>
-        <div style={{ background: BADGE, color: "#fff", fontWeight: 700, fontSize: 14, padding: "5px 14px", letterSpacing: 0.5, WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" } as React.CSSProperties}>
-          {isPaymentReceipt ? "CASH/CREDIT PAYMENT RECEIPT" : "CASH/CREDIT INVOICE"}
-        </div>
-        <div style={{ fontFamily: "Georgia, serif", fontStyle: "italic", fontWeight: 700, fontSize: 16 }}>
-          No.: <span style={{ fontFamily: "monospace", fontStyle: "normal", letterSpacing: 2 }}>{receiptNo}</span>
-        </div>
-      </div>
-
-      <div style={{ display: "flex", gap: 16, marginTop: 14, alignItems: "flex-start" }}>
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8, border: "1px solid #444", borderRight: "none", borderLeft: "none", padding: "6px 0" }}>
-          <Line label="Name:" value={customer?.name} />
-          <Line label="Address:" value={customer?.address} />
-          <Line label="Tel:" value={customer?.phone} />
-        </div>
-        <table style={{ borderCollapse: "collapse", fontSize: 10, width: 190 }}>
-          <thead>
-            <tr>
-              {["DATE", "MONTH", "YEAR"].map((h) => (
-                <th key={h} style={{ border: "1px solid #333", padding: "2px 4px", fontWeight: 500 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td style={{ border: "1px solid #333", textAlign: "center", height: 24, fontWeight: 700 }}>{d.getDate()}</td>
-              <td style={{ border: "1px solid #333", textAlign: "center", fontWeight: 700 }}>{d.toLocaleString("en-GB", { month: "short" })}</td>
-              <td style={{ border: "1px solid #333", textAlign: "center", fontWeight: 700 }}>{d.getFullYear()}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 14, position: "relative", zIndex: 1 }}>
-        <thead>
-          <tr>
-            <th style={{ ...th, width: 50 }} rowSpan={2}>QTY</th>
-            <th style={th} rowSpan={2}>DESCRIPTION OF GOOD</th>
-            <th style={{ ...th, width: 100 }} rowSpan={2}>RATE</th>
-            <th style={th} colSpan={2}>AMOUNT</th>
-          </tr>
-          <tr>
-            <th style={{ ...th, width: 105, padding: 2, fontSize: 11 }}>₦</th>
-            <th style={{ ...th, width: 36, padding: 2, fontSize: 11 }}>K</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r: any, i: number) => (
-            <tr key={i}>
-              <td style={{ ...cell, textAlign: "center" }}>{r.qty}</td>
-              <td style={cell}>{r.description}</td>
-              <td style={{ ...cell, textAlign: "right" }}>{fmt(r.rate)}</td>
-              <td style={{ ...cell, background: PINK, textAlign: "right", fontWeight: 700, WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" } as React.CSSProperties}>{fmt(r.amount)}</td>
-              <td style={{ ...cell, textAlign: "center" }}>00</td>
-            </tr>
-          ))}
-          {Array.from({ length: emptyRows }).map((_, i) => (
-            <tr key={`e${i}`}>
-              <td style={cell}></td>
-              <td style={cell}></td>
-              <td style={cell}></td>
-              <td style={{ ...cell, background: PINK, WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" } as React.CSSProperties}></td>
-              <td style={cell}></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginTop: 6, position: "relative", zIndex: 1 }}>
-        <div style={{ color: RED, fontFamily: "Georgia, serif", fontStyle: "italic", fontSize: 12, lineHeight: 1.4, paddingTop: 4 }}>
-          Received the above goods in good condition.<br />
-          No refund of money after payment
-          {isPaymentReceipt && (
-            <div style={{ color: "#222", fontStyle: "normal", marginTop: 6, fontSize: 11.5, fontFamily: "Arial, sans-serif" }}>
-              <b>Paid this transaction:</b> ₦{paymentAmount.toLocaleString()} &nbsp;|&nbsp;{" "}
-              <b>Balance:</b> {balance > 0 ? `₦${balance.toLocaleString()}` : "NIL — FULLY PAID"}
-            </div>
-          )}
-        </div>
-        <table style={{ borderCollapse: "collapse" }}>
-          <tbody>
-            <tr>
-              <td style={{ border: "none", fontWeight: 800, fontSize: 14, paddingRight: 10, fontFamily: "Georgia, serif" }}>TOTAL ₦</td>
-              <td style={{ border: "1px solid #222", background: PINK, width: 105, height: 30, textAlign: "right", fontWeight: 800, padding: "0 6px", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" } as React.CSSProperties}>
-                {naira.toLocaleString()}
-              </td>
-              <td style={{ border: "1px solid #222", width: 36, textAlign: "center", fontWeight: 700 }}>{kobo}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div style={{ marginTop: 24, position: "relative", zIndex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
-        <Line label="Amount in words:" value={amountWords} />
-        <div style={{ display: "flex", alignItems: "flex-end", gap: 8, fontFamily: "Georgia, serif", fontSize: 13 }}>
-          <span style={{ flex: 1, borderBottom: "1px solid #333", minHeight: 18 }}></span>
-          <span>Naira</span>
-          <span style={{ width: 110, borderBottom: "1px solid #333", minHeight: 18, textAlign: "center", fontFamily: "Arial", fontWeight: 600 }}>{kobo !== "00" ? kobo : ""}</span>
-          <span>Kobo</span>
-        </div>
-      </div>
-
-      {/* Signature Section with dynamic digital signatures */}
-      <div style={{ marginTop: 26, display: "flex", justifyContent: "space-between", alignItems: "flex-end", position: "relative", zIndex: 1 }}>
-        <SignBox
-          label="Customer's Sign"
-          signature={customerSignature}
-          date={customerSignatureDate}
-          onSignClick={onSignClick}
-          isSigningMode={isSigningMode}
-        />
-        <div style={{ fontFamily: "Georgia, serif", fontStyle: "italic", fontSize: 12, textAlign: "center", paddingBottom: 6 }}>
-          Thanks for your patronage
-        </div>
-        <SignBox
-          label="Manager's Sign"
-          signature={repSignature}
-          date={repSignatureDate}
-          align="right"
-        />
-      </div>
-    </>
-  );
-}
-
-/* ---------- Template 2: Vehicle Sales Agreement Receipt (non-registered / Nigerian used) ---------- */
-
-function VehicleSalesAgreementReceipt(props: any) {
-  const {
-    receiptNo,
-    date,
-    customer,
     vehicleList,
     total,
     amountWords,
     isPaymentReceipt,
     paymentAmount,
+    amountPaid,
     balance,
+    statusLabel,
+    statusColor,
     customerSignature,
     customerSignatureDate,
     repSignature,
@@ -313,187 +61,195 @@ function VehicleSalesAgreementReceipt(props: any) {
     isSigningMode,
   } = props;
 
-  const formattedDate = new Date(date).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  const money = (n: number) => `₦${Math.round(Number(n) || 0).toLocaleString()}`;
+  const issued = new Date(date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
-  const Witness = () => (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <Line label="Name:" />
-      <Line label="Address:" />
-      <div style={{ borderBottom: "1px solid #333", height: 14 }} />
-      <Line label="Occupation:" />
-      <Line label="Signature:" />
-    </div>
-  );
+  const colQty: React.CSSProperties = { width: 54, textAlign: "center" };
+  const colUnit: React.CSSProperties = { width: 118, textAlign: "right" };
+  const colAmt: React.CSSProperties = { width: 118, textAlign: "right" };
+  const headCell: React.CSSProperties = {
+    fontSize: 9.5,
+    color: "#777",
+    fontWeight: 500,
+    paddingBottom: 9,
+    borderBottom: `1px solid ${RULE}`,
+  };
+  const bodyCell: React.CSSProperties = {
+    padding: "11px 0",
+    borderBottom: `1px solid ${ROW_RULE}`,
+    fontSize: 11,
+    verticalAlign: "middle",
+  };
+  const sumRow: React.CSSProperties = { display: "flex", justifyContent: "space-between", gap: 16, padding: "3px 0", fontSize: 11 };
+  // Nothing outstanding reads as settled, not as an alert.
+  const balanceColor = balance > 0 ? RED : POSITIVE;
 
   return (
-    <>
-      <PrintHeader />
+    <div style={{ fontFamily: MODERN_FONT, color: INK }}>
+      <ModernLetterhead docTitle={isPaymentReceipt ? "Receipt" : "Invoice"} docNumber={docNumber} />
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginTop: 14 }}>
-        <div style={{ fontFamily: "Arial, sans-serif", fontWeight: 800, fontSize: 17, lineHeight: 1.15, color: DARK }}>
-          VEHICLE SALES<br />AGREEMENT RECEIPT
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontFamily: "Georgia, serif", fontStyle: "italic", fontWeight: 700, fontSize: 15 }}>
-            No.: <span style={{ fontFamily: "monospace", fontStyle: "normal", letterSpacing: 2 }}>{receiptNo}</span>
+      <div style={{ height: 1, background: RULE, margin: "15px 0 17px", ...exactPrint }} />
+
+      {/* Billed to · date · status · vehicles */}
+      <div style={{ display: "flex", gap: 22, alignItems: "flex-start", position: "relative", zIndex: 1 }}>
+        <div style={{ width: "40%" }}>
+          <MetaLabel>Billed to</MetaLabel>
+          <div style={{ fontSize: 14.5, fontWeight: 800, textTransform: "uppercase", marginTop: 5, lineHeight: 1.2 }}>
+            {customer?.name || "—"}
           </div>
-          <div style={{ display: "inline-flex", marginTop: 6, border: "1px solid #333" }}>
-            <span style={{ background: DARK, color: "#fff", fontWeight: 700, fontSize: 12, padding: "3px 10px", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" } as React.CSSProperties}>Date:</span>
-            <span style={{ minWidth: 130, padding: "3px 8px", fontSize: 12, fontWeight: 600 }}>{formattedDate}</span>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ marginTop: 16, position: "relative", zIndex: 1, display: "flex", flexDirection: "column", gap: 10 }}>
-        <Line label="This is to certify that I Mr/Mrs/Miss/Alh.Mal.:" value={customer?.name} />
-        <Line label="Of" value={[customer?.address, customer?.phone].filter(Boolean).join(" • ")} />
-
-        <div style={{ color: RED, fontSize: 13, fontFamily: "Arial, sans-serif", marginTop: 2 }}>
-          Purchases a vehicle at ABUJA BEST CARS LTD. with the following Documents.
+          {customer?.phone && <div style={{ fontSize: 10, color: "#666", marginTop: 4 }}>{customer.phone}</div>}
+          {customer?.address && <div style={{ fontSize: 10, color: "#666", marginTop: 1 }}>{customer.address}</div>}
+          {customer?.email && <div style={{ fontSize: 10, color: "#666", marginTop: 1 }}>{customer.email}</div>}
         </div>
 
-        {vehicleList.map((v: any, idx: number) => (
-          <div key={v.id || idx} style={{ display: "flex", flexDirection: "column", gap: 7, fontSize: 13, fontFamily: "Georgia, serif", paddingLeft: 10 }}>
-            {vehicleList.length > 1 && <b style={{ fontFamily: "Arial", fontSize: 11 }}>Vehicle {idx + 1}</b>}
-            <div style={{ width: "72%" }}><Line label="1. Types of Vehicle" value={`${v.make || ""} ${v.year || ""}`.trim()} /></div>
-            <div style={{ width: "72%" }}><Line label="2. Model:" value={`${v.model || ""}${v.trim ? " " + v.trim : ""}`.trim()} /></div>
-            <div style={{ width: "72%" }}><Line label="3. Chassis No:" value={v.vin} /></div>
-            <div style={{ width: "72%" }}><Line label="4. Engine No:" value={v.engine_number} /></div>
-            <div style={{ width: "72%" }}><Line label="5. Registration No:" value={v.registration_number || v.plate_number} /></div>
-          </div>
-        ))}
+        <div style={{ flex: 1 }}>
+          <MetaLabel>Date issued</MetaLabel>
+          <div style={{ fontSize: 12, fontWeight: 700, marginTop: 5 }}>{issued}</div>
 
-        <div style={{ marginTop: 6 }}>
-          <Line
-            label="Now the vehicle is sold at the cost of (₦"
-            value={`${total.toLocaleString()}${isPaymentReceipt ? `  — paid now ₦${paymentAmount.toLocaleString()}, balance ${balance > 0 ? "₦" + balance.toLocaleString() : "NIL"}` : ""}`}
-          />
-        </div>
-        <Line label=") Amount in words" value={`${amountWords} NAIRA ONLY`} />
-      </div>
-
-      <div style={{ marginTop: 18, position: "relative", zIndex: 1, fontFamily: "Georgia, serif", fontSize: 13.5 }}>
-        In the presence of the following witnesses.
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 30, marginTop: 8 }}>
-          <Witness />
-          <Witness />
-        </div>
-      </div>
-
-      <div style={{ marginTop: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 30, position: "relative", zIndex: 1 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ fontWeight: 700, fontSize: 13.5, fontFamily: "Georgia, serif" }}>SOLD BY:</div>
-          <Line label="Name:" value="ABUJA BEST CARS LTD" />
-          <Line label="Address:" value="Gwarinpa, Abuja" />
-          <div style={{ borderBottom: "1px solid #333", height: 14 }} />
-          <Line label="Occupation:" />
-          <Line label="Signature:" />
-        </div>
-        <div style={{ textAlign: "center", fontSize: 14, lineHeight: 1.35 }}>
-          <span style={{ background: BADGE, color: "#fff", fontWeight: 600, padding: "2px 10px", fontSize: 12, WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" } as React.CSSProperties}>NOTE:</span>
-          <p style={{ marginTop: 6 }}>
-            Vehicle has been tested and certified by the buyer and will be purchased "as is". Therefore, there shall be no refund of money or vehicle after payment.
-          </p>
-        </div>
-      </div>
-
-      {/* Signature Section with dynamic digital signatures */}
-      <div style={{ marginTop: 22, position: "relative", zIndex: 1 }}>
-        <div style={{ fontFamily: "Georgia, serif", fontStyle: "italic", fontWeight: 700, fontSize: 14 }}>
-          Vehicle received in good condition (BUYER)
-        </div>
-        <div style={{ display: "flex", gap: 24, marginTop: 6, alignItems: "flex-end" }}>
-          <div style={{ flex: 1, display: "flex", alignItems: "flex-end", gap: 6, fontSize: 13, fontFamily: "Georgia, serif" }}>
-            <span style={{ paddingBottom: 2 }}>Sign:</span>
-            <div style={{ flex: 1, borderBottom: "1px solid #333", minHeight: 46, display: "flex", alignItems: "flex-end", paddingLeft: 4, paddingBottom: 2 }}>
-              {customerSignature ? (
-                <img
-                  src={customerSignature}
-                  alt="Customer Signature"
-                  style={{
-                    maxHeight: 42,
-                    maxWidth: 220,
-                    objectFit: "contain",
-                    filter: "brightness(0)",
-                    WebkitFilter: "brightness(0)",
-                    WebkitPrintColorAdjust: "exact",
-                    printColorAdjust: "exact",
-                  } as React.CSSProperties}
-                />
-              ) : isSigningMode && onSignClick ? (
-                <button
-                  type="button"
-                  onClick={onSignClick}
-                  className="animate-pulse"
-                  style={{
-                    height: 38,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 6,
-                    border: "1.5px dashed #d9342b",
-                    borderRadius: 8,
-                    padding: "0 12px",
-                    background: "#fff5f5",
-                    color: "#d9342b",
-                    fontWeight: 700,
-                    fontSize: 11,
-                    fontFamily: "Arial, sans-serif",
-                    fontStyle: "normal",
-                    cursor: "pointer",
-                  }}
-                >
-                  <PenLine style={{ width: 13, height: 13 }} /> Tap to Sign Here
-                </button>
-              ) : null}
+          {vehicleList?.length > 0 && (
+            <div style={{ marginTop: 15 }}>
+              <MetaLabel>{vehicleList.length > 1 ? "Vehicles" : "Vehicle"}</MetaLabel>
+              {vehicleList.map((v: any, i: number) => (
+                <div key={v?.id || i} style={{ marginTop: 7 }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 700 }}>
+                    {`${v?.make || ""} ${v?.model || ""}`.trim() || "Vehicle"}
+                    {v?.year ? ` (${v.year})` : ""}
+                  </div>
+                  <div style={{ fontSize: 8.5, color: "#777", lineHeight: 1.65, marginTop: 1 }}>
+                    {v?.vin && (
+                      <>
+                        VIN: <b style={{ color: "#333" }}>{v.vin}</b>
+                        <br />
+                      </>
+                    )}
+                    {v?.color && (
+                      <>
+                        Color: <b style={{ color: "#333" }}>{v.color}</b>
+                        <br />
+                      </>
+                    )}
+                    {v?.trim && (
+                      <>
+                        Trim: <b style={{ color: "#333" }}>{v.trim}</b>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
-          <div style={{ flex: 1, display: "flex", alignItems: "flex-end", gap: 6, fontSize: 13, fontFamily: "Georgia, serif" }}>
-            <span style={{ paddingBottom: 2 }}>Date:</span>
-            <div style={{ flex: 1, borderBottom: "1px solid #333", minHeight: 24, paddingLeft: 4, paddingBottom: 2, fontFamily: "Arial, sans-serif", fontWeight: 600, fontSize: 12 }}>
-              {customerSignatureDate ? new Date(customerSignatureDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : ""}
-            </div>
-          </div>
+          )}
         </div>
 
-        <div style={{ fontFamily: "Georgia, serif", fontStyle: "italic", fontWeight: 700, fontSize: 13, color: RED, marginTop: 14 }}>
-          Managing Director ABUJA BEST CARS LTD.
-        </div>
-        <div style={{ display: "flex", gap: 24, marginTop: 6, alignItems: "flex-end" }}>
-          <div style={{ flex: 1, display: "flex", alignItems: "flex-end", gap: 6, fontSize: 13, fontFamily: "Georgia, serif" }}>
-            <span style={{ paddingBottom: 2 }}>Sign:</span>
-            <div style={{ flex: 1, borderBottom: "1px solid #333", minHeight: 46, display: "flex", alignItems: "flex-end", paddingLeft: 4, paddingBottom: 2 }}>
-              {repSignature ? (
-                <img
-                  src={repSignature}
-                  alt="MD Signature"
-                  style={{
-                    maxHeight: 42,
-                    maxWidth: 220,
-                    objectFit: "contain",
-                    filter: "brightness(0)",
-                    WebkitFilter: "brightness(0)",
-                    WebkitPrintColorAdjust: "exact",
-                    printColorAdjust: "exact",
-                  } as React.CSSProperties}
-                />
-              ) : null}
-            </div>
-          </div>
-          <div style={{ flex: 1, display: "flex", alignItems: "flex-end", gap: 6, fontSize: 13, fontFamily: "Georgia, serif" }}>
-            <span style={{ paddingBottom: 2 }}>Date:</span>
-            <div style={{ flex: 1, borderBottom: "1px solid #333", minHeight: 24, paddingLeft: 4, paddingBottom: 2, fontFamily: "Arial, sans-serif", fontWeight: 600, fontSize: 12 }}>
-              {repSignatureDate ? new Date(repSignatureDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : ""}
-            </div>
+        <div style={{ width: 118, textAlign: "right" }}>
+          <MetaLabel>Payment status</MetaLabel>
+          <div style={{ fontSize: 11, fontWeight: 800, marginTop: 5, color: statusColor, textTransform: "uppercase", letterSpacing: 0.3, ...exactPrint }}>
+            {statusLabel}
           </div>
         </div>
       </div>
-    </>
+
+      {/* Line items */}
+      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 24, position: "relative", zIndex: 1 }}>
+        <thead>
+          <tr>
+            <th style={{ ...headCell, textAlign: "left" }}>Description</th>
+            <th style={{ ...headCell, ...colQty }}>Qty</th>
+            <th style={{ ...headCell, ...colUnit }}>Unit Price</th>
+            <th style={{ ...headCell, ...colAmt }}>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r: any, i: number) => (
+            <tr key={i}>
+              <td style={{ ...bodyCell, paddingRight: 14 }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ fontWeight: 700, fontSize: 11.5 }}>{r.title}</span>
+                  {r.tag && <span style={{ fontSize: 9.5, color: "#9a9a9a" }}>{r.tag}</span>}
+                </div>
+                {r.sub && <div style={{ fontSize: 9, color: "#777", marginTop: 2, lineHeight: 1.45 }}>{r.sub}</div>}
+              </td>
+              <td style={{ ...bodyCell, ...colQty }}>{r.qty}</td>
+              <td style={{ ...bodyCell, ...colUnit }}>{money(r.rate)}</td>
+              <td style={{ ...bodyCell, ...colAmt, fontWeight: 700 }}>{money(r.amount)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {/* Amount in words + summary */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 26, marginTop: 20, position: "relative", zIndex: 1 }}>
+        <div style={{ flex: 1, paddingBottom: 2 }}>
+          <MetaLabel>{isPaymentReceipt ? "Amount received in words" : "Amount in words"}</MetaLabel>
+          <div style={{ fontSize: 11.5, fontStyle: "italic", marginTop: 5, lineHeight: 1.45 }}>{amountWords}</div>
+        </div>
+
+        <div style={{ width: 300 }}>
+          {isPaymentReceipt && (
+            <div style={sumRow}>
+              <span style={{ color: "#555" }}>This payment</span>
+              <span style={{ fontWeight: 700 }}>{money(paymentAmount)}</span>
+            </div>
+          )}
+          <div style={{ ...sumRow, fontSize: 13.5, fontWeight: 800, paddingTop: 4 }}>
+            <span>Total</span>
+            <span>{money(total)}</span>
+          </div>
+          <div style={{ ...sumRow, color: POSITIVE, ...exactPrint }}>
+            <span>Amount Paid</span>
+            <span>{money(amountPaid)}</span>
+          </div>
+          <div style={{ height: 1, background: RULE, margin: "8px 0", ...exactPrint }} />
+          <div style={{ ...sumRow, alignItems: "baseline" }}>
+            <span style={{ color: balanceColor, fontWeight: 800, fontSize: 13, ...exactPrint }}>Balance Due</span>
+            <span style={{ color: balanceColor, fontWeight: 800, fontSize: 16.5, ...exactPrint }}>{money(balance)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Payment details */}
+      <div style={{ marginTop: 20 }}>
+        <PaymentDetailsPanel
+          note={
+            balance > 0
+              ? "Kindly pay the outstanding balance to the account details below:"
+              : "Payment received in full into the account details below:"
+          }
+        />
+      </div>
+
+      {/* Signatures */}
+      <div style={{ marginTop: 24, display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 24, position: "relative", zIndex: 1 }}>
+        <ModernSignSlot
+          label="Customer's Signature"
+          signature={customerSignature}
+          date={customerSignatureDate}
+          onSignClick={onSignClick}
+          isSigningMode={isSigningMode}
+        />
+        <ModernSignSlot
+          label="For Abuja Best Cars Ltd"
+          signature={repSignature}
+          date={repSignatureDate}
+          align="right"
+        />
+      </div>
+
+      {/* Footer */}
+      <div style={{ marginTop: 22, textAlign: "center", position: "relative", zIndex: 1 }}>
+        <div style={{ fontSize: 10.5, fontWeight: 700 }}>Thank you for your business!</div>
+        <div style={{ fontSize: 8.5, color: "#888", marginTop: 3 }}>
+          {COMPANY.headOffice} &nbsp;·&nbsp; {COMPANY.tel}
+        </div>
+        <div style={{ fontSize: 8, color: "#a5a5a5", marginTop: 4, fontStyle: "italic" }}>
+          Vehicle received in good condition. No refund of money after payment.
+        </div>
+      </div>
+    </div>
   );
 }
 
 /* ---------------------------------------------------------------- */
-/*  Exported Reusable Receipt Sheet (Exact printed template)        */
+/*  Exported Reusable Receipt Sheet                                 */
 /* ---------------------------------------------------------------- */
 
 export interface SaleReceiptSheetProps {
@@ -503,7 +259,6 @@ export interface SaleReceiptSheetProps {
   payment?: any;
   paymentIndex?: number;
   allPayments?: any[];
-  receiptType: ReceiptType;
   customerSignature?: string | null;
   customerSignatureDate?: string | null;
   repSignature?: string | null;
@@ -521,7 +276,6 @@ export const SaleReceiptSheet = forwardRef<HTMLDivElement, SaleReceiptSheetProps
       payment,
       paymentIndex,
       allPayments = [],
-      receiptType,
       customerSignature,
       customerSignatureDate,
       repSignature,
@@ -549,37 +303,76 @@ export const SaleReceiptSheet = forwardRef<HTMLDivElement, SaleReceiptSheetProps
     const isPaymentReceipt = Boolean(payment);
     const paymentAmount = payment ? Number(payment.amount) || 0 : totalSalePrice;
 
-    let balance = 0;
-    if (isPaymentReceipt && allPayments.length > 0) {
-      const paidBefore = allPayments
-        .filter((_: any, i: number) => i > (paymentIndex ?? 0))
-        .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
-      balance = Math.max(0, totalSalePrice - (paidBefore + paymentAmount));
-    }
+    // Payments are returned newest-first, so entries AFTER this index were made earlier.
+    const paymentsList: any[] = allPayments.length > 0 ? allPayments : (sale?.sale_payments || []);
+    const sumOf = (list: any[]) => list.reduce((sum: number, p: any) => sum + (Number(p?.amount) || 0), 0);
+    const paidBefore = isPaymentReceipt
+      ? sumOf(paymentsList.filter((_: any, i: number) => i > (paymentIndex ?? 0)))
+      : 0;
+    const amountPaid = isPaymentReceipt
+      ? paidBefore + paymentAmount
+      : paymentsList.length > 0
+        ? sumOf(paymentsList)
+        : totalSalePrice;
+    const balance = Math.max(0, totalSalePrice - amountPaid);
 
     const receiptDate = payment?.payment_date || sale?.sale_date || sale?.created_at || new Date().toISOString();
-    const receiptNumber = (payment?.id || sale?.id || "").replace(/\D/g, "").slice(0, 4).padStart(4, "0");
+    const serial = (payment?.id || sale?.id || "").replace(/\D/g, "").slice(0, 4).padStart(4, "0");
+    const issuedOn = new Date(receiptDate);
+    const docNumber = `${isPaymentReceipt ? "RCT" : "INV"}-${String(issuedOn.getDate()).padStart(2, "0")}${String(
+      issuedOn.getMonth() + 1
+    ).padStart(2, "0")}-${serial}`;
     const grandTotal = isPaymentReceipt ? paymentAmount : totalSalePrice;
-    const amountWords = numberToWords(grandTotal).toUpperCase();
+    const amountWords = titleCase(numberToWords(grandTotal));
 
-    // Invoice rows
+    const statusLabel = balance <= 0 ? "Paid in full" : isPaymentReceipt ? "Part payment" : "Balance due";
+    const statusColor = balance <= 0 ? POSITIVE : RED;
+
+    // Line items
+    const vehicleName = (v: any) => `${v?.make || ""} ${v?.model || ""}`.trim() || "Vehicle";
     const perVehicle = saleVehicleObjects.length > 0 ? totalSalePrice / saleVehicleObjects.length : totalSalePrice;
-    const rows = isPaymentReceipt
-      ? [{
-          qty: 1,
-          description: `Part/Full payment for ${saleVehicleObjects.map((v: any) => `${v.year || ""} ${v.make || ""} ${v.model || ""}`.trim()).join(", ")}${saleVehicleObjects[0]?.vin ? ` (VIN: ${saleVehicleObjects[0].vin})` : ""}`,
-          rate: paymentAmount,
-          amount: paymentAmount,
-        }]
+
+    const paymentTitle =
+      balance <= 0 && paidBefore === 0 ? "Full payment" : paidBefore === 0 ? "Initial deposit" : "Part payment";
+
+    let rows: any[] = isPaymentReceipt
+      ? [
+          {
+            title: paymentTitle,
+            tag: saleVehicleObjects.map(vehicleName).join(", "),
+            sub: [
+              payment?.payment_method ? `Method: ${String(payment.payment_method).replace(/_/g, " ")}` : null,
+              payment?.notes || null,
+            ]
+              .filter(Boolean)
+              .join("  ·  "),
+            qty: 1,
+            rate: paymentAmount,
+            amount: paymentAmount,
+          },
+        ]
       : saleVehicleObjects.map((v: any) => ({
+          title: `${v?.year || ""} ${vehicleName(v)}`.trim(),
+          tag: v?.trim || v?.condition || "",
+          sub: [
+            v?.vin ? `VIN: ${v.vin}` : null,
+            v?.color ? `Colour: ${v.color}` : null,
+            v?.transmission || null,
+            v?.mileage ? `${Number(v.mileage).toLocaleString()} km` : null,
+          ]
+            .filter(Boolean)
+            .join("  ·  "),
           qty: 1,
-          description: `${v.year || ""} ${v.make || ""} ${v.model || ""}${v.trim ? " " + v.trim : ""}${v.color ? ", " + v.color : ""}${v.vin ? ` — VIN: ${v.vin}` : ""}`.trim(),
           rate: perVehicle,
           amount: perVehicle,
         }));
 
+    if (rows.length === 0) {
+      rows = [{ title: "Vehicle sale", tag: "", sub: "", qty: 1, rate: totalSalePrice, amount: totalSalePrice }];
+    }
+
     const shared = {
-      receiptNo: receiptNumber,
+      docNumber,
       date: receiptDate,
       customer,
       rows,
@@ -588,7 +381,10 @@ export const SaleReceiptSheet = forwardRef<HTMLDivElement, SaleReceiptSheetProps
       amountWords,
       isPaymentReceipt,
       paymentAmount,
+      amountPaid,
       balance,
+      statusLabel,
+      statusColor,
       sale,
       customerSignature,
       customerSignatureDate,
@@ -598,7 +394,7 @@ export const SaleReceiptSheet = forwardRef<HTMLDivElement, SaleReceiptSheetProps
       isSigningMode,
     };
 
-    const invoiceProps = { ...shared, total: grandTotal };
+    const invoiceProps = shared;
 
     return (
       <div
@@ -606,13 +402,9 @@ export const SaleReceiptSheet = forwardRef<HTMLDivElement, SaleReceiptSheetProps
         className="print-document-page bg-white text-black shadow-2xl border border-gray-200 md:w-[210mm] md:min-h-[297mm] shrink-0 relative"
         style={{ padding: "12mm 14mm", boxSizing: "border-box" }}
       >
-        <PrintWatermark />
+        <PrintWatermark opacity={0.05} />
         <div style={{ position: "relative", zIndex: 1 }}>
-          {receiptType === "registered" ? (
-            <CashCreditInvoice {...invoiceProps} />
-          ) : (
-            <VehicleSalesAgreementReceipt {...shared} total={totalSalePrice} />
-          )}
+          <ModernInvoice {...invoiceProps} />
         </div>
         <div
           style={{
@@ -620,10 +412,9 @@ export const SaleReceiptSheet = forwardRef<HTMLDivElement, SaleReceiptSheetProps
             left: 0,
             right: 0,
             bottom: 0,
-            height: 10,
-            background: receiptType === "registered" ? DARK : BADGE,
-            WebkitPrintColorAdjust: "exact",
-            printColorAdjust: "exact",
+            height: 6,
+            background: RED,
+            ...exactPrint,
           } as React.CSSProperties}
         />
       </div>
@@ -718,22 +509,6 @@ export function SalePrintPreview({
     sale?.rep_signature_date ||
     (repSignature ? (sale?.sale_date || sale?.created_at) : null);
 
-  // Vehicles in this sale
-  const saleVehicleIds = sale?.sale_vehicles?.length > 0
-    ? sale.sale_vehicles.map((sv: any) => sv.vehicle_id)
-    : [sale?.vehicle_id];
-
-  let saleVehicleObjects = vehicles.filter((v: any) => saleVehicleIds.includes(v.id));
-  if (saleVehicleObjects.length === 0 && sale?.vehicles) {
-    saleVehicleObjects = Array.isArray(sale.vehicles) ? sale.vehicles : [sale.vehicles];
-  }
-
-  // Default template guess from the vehicle's condition/inventory type
-  const looksNigerianUsed = saleVehicleObjects.some((v: any) =>
-    /nigerian|local|non[-\s]?reg/i.test(`${v?.condition || ""} ${v?.inventory_type || ""}`)
-  );
-  const [receiptType, setReceiptType] = useState<ReceiptType>(looksNigerianUsed ? "non_registered" : "registered");
-
   return (
     <div className="animate-fade-up max-w-4xl mx-auto pb-12 print:p-0 print:m-0">
       <style dangerouslySetInnerHTML={{ __html: `
@@ -807,34 +582,6 @@ export function SalePrintPreview({
             </Button>
           </div>
         </div>
-
-        {/* Receipt type selector */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {([
-            { id: "registered", title: "Registered Vehicle", sub: "Cash/Credit Invoice", icon: FileText },
-            { id: "non_registered", title: "Non-Registered / Nigerian Used", sub: "Vehicle Sales Agreement Receipt", icon: ScrollText },
-          ] as const).map((opt) => {
-            const active = receiptType === opt.id;
-            const Icon = opt.icon;
-            return (
-              <button
-                key={opt.id}
-                type="button"
-                id={`receipt-type-${opt.id}`}
-                onClick={() => setReceiptType(opt.id)}
-                className={`flex items-center gap-3 rounded-2xl border-2 px-4 py-3 text-left transition-all ${
-                  active ? "border-[#d4ff32] bg-[#d4ff32]/10 shadow-md" : "border-border hover:border-muted-foreground/40"
-                }`}
-              >
-                <Icon className={`w-5 h-5 ${active ? "text-foreground" : "text-muted-foreground"}`} />
-                <div>
-                  <div className="text-sm font-bold">{opt.title}</div>
-                  <div className="text-xs text-muted-foreground">{opt.sub}</div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
       </div>
 
       {/* Printable A4 sheet */}
@@ -847,7 +594,6 @@ export function SalePrintPreview({
           payment={payment}
           paymentIndex={paymentIndex}
           allPayments={allPayments}
-          receiptType={receiptType}
           customerSignature={customerSignature}
           customerSignatureDate={customerSignatureDate}
           repSignature={repSignature}

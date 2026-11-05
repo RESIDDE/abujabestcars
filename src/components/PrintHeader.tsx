@@ -1,4 +1,5 @@
 import React from "react";
+import { PenLine } from "lucide-react";
 import logo from "@/assets/logo.png";
 
 /* Brand tokens — shared with the sales receipt templates */
@@ -67,14 +68,15 @@ export function getPrintHeaderHTML(base64Logo?: string) {
 }
 
 // React component for watermark
-export function PrintWatermark() {
+export function PrintWatermark({ opacity }: { opacity?: number } = {}) {
   return (
     <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 select-none overflow-hidden">
       <img
         src={logo}
         alt="Watermark"
-        className="w-[460px] h-[460px] max-w-[85%] max-h-[460px] object-contain opacity-[0.09]"
+        className={`w-[460px] h-[460px] max-w-[85%] max-h-[460px] object-contain${opacity === undefined ? " opacity-[0.09]" : ""}`}
         style={{
+          opacity,
           WebkitPrintColorAdjust: "exact",
           printColorAdjust: "exact",
         }}
@@ -107,4 +109,238 @@ export function getPrintWatermarkHTML(base64Logo?: string) {
       <img src="${logoUrl}" style="width: 460px; height: 460px; max-width: 85%; max-height: 460px; object-fit: contain; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;" />
     </div>
   `;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Modern document system (used by the sales receipt / invoice sheet) */
+/* ------------------------------------------------------------------ */
+
+/** Soft red tint used for the payment-details panel. */
+export const BRAND_RED_SOFT = "#fdf3f2";
+/** Hairline border that pairs with BRAND_RED_SOFT. */
+export const BRAND_RED_LINE = "#f3d9d6";
+/** Primary text colour for modern documents. */
+export const INK = "#111111";
+/** Small-caps meta labels. */
+export const MUTED = "#8a8a8a";
+/** Section rule. */
+export const RULE = "#e3e3e3";
+/** Table row rule. */
+export const ROW_RULE = "#f1f1f1";
+/** Positive / settled amounts. */
+export const POSITIVE = "#0f9d58";
+
+export const MODERN_FONT = "'Helvetica Neue', Helvetica, Arial, sans-serif";
+
+/**
+ * Company account printed on receipts and invoices.
+ * Update here to change it everywhere the payment panel appears.
+ */
+export const COMPANY_BANK = {
+  bank: "Zenith Bank",
+  account: "1229785752",
+  accountName: "ABUJA BEST CARS",
+};
+
+const exactPrint = { WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" } as React.CSSProperties;
+
+/** Small uppercase meta label, e.g. "BILLED TO". */
+export function MetaLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: 1.1, color: MUTED, textTransform: "uppercase" }}>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Modern letterhead: logo + company block on the left, document word
+ * (INVOICE / RECEIPT) and its number on the right, in brand red.
+ */
+export function ModernLetterhead({ docTitle, docNumber }: { docTitle: string; docNumber: string }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 18, position: "relative", zIndex: 1 }}>
+      <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+        <img src={logo} alt={COMPANY.name} style={{ width: 62, height: 62, objectFit: "contain", borderRadius: "50%" }} />
+        <div style={{ paddingTop: 2 }}>
+          <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: 0.2, color: INK, textTransform: "uppercase" }}>
+            {COMPANY.name}
+          </div>
+          <div style={{ fontSize: 9, color: "#6b6b6b", lineHeight: 1.55, marginTop: 3, maxWidth: 290 }}>
+            {COMPANY.headOffice}<br />
+            {COMPANY.branchOffice}<br />
+            {COMPANY.tel}
+          </div>
+        </div>
+      </div>
+      <div style={{ textAlign: "right" }}>
+        <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: -0.6, color: BRAND_RED, lineHeight: 1, textTransform: "uppercase", ...exactPrint }}>
+          {docTitle}
+        </div>
+        <div style={{ fontSize: 10.5, color: "#8a8a8a", marginTop: 5, fontFamily: "monospace", letterSpacing: 0.5 }}>
+          #{docNumber}
+        </div>
+        <div style={{ fontSize: 8, color: "#aaa", marginTop: 3, letterSpacing: 0.5 }}>{COMPANY.rc}</div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Rounded, red-tinted panel listing the account to pay into.
+ * Falls back to COMPANY_BANK when the document carries no account of its own.
+ */
+export function PaymentDetailsPanel({
+  note,
+  bank,
+  account,
+  accountName,
+}: {
+  note?: string;
+  bank?: string | null;
+  account?: string | null;
+  accountName?: string | null;
+}) {
+  const details = {
+    bank: bank || COMPANY_BANK.bank,
+    account: account || COMPANY_BANK.account,
+    accountName: accountName || COMPANY_BANK.accountName,
+  };
+  const col = (label: string, value: React.ReactNode, accent?: boolean) => (
+    <div>
+      <MetaLabel>{label}</MetaLabel>
+      <div
+        style={{
+          fontSize: accent ? 12.5 : 11.5,
+          fontWeight: accent ? 800 : 700,
+          marginTop: 3,
+          color: accent ? BRAND_RED : INK,
+          fontFamily: accent ? "monospace" : undefined,
+          letterSpacing: accent ? 1 : undefined,
+          ...exactPrint,
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+
+  return (
+    <div
+      className="break-inside-avoid print:break-inside-avoid"
+      style={{
+        background: BRAND_RED_SOFT,
+        border: `1px solid ${BRAND_RED_LINE}`,
+        borderRadius: 10,
+        padding: "13px 18px",
+        textAlign: "center",
+        position: "relative",
+        zIndex: 1,
+        ...exactPrint,
+      }}
+    >
+      <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 1.6, color: BRAND_RED, textTransform: "uppercase", ...exactPrint }}>
+        Payment Details
+      </div>
+      <div style={{ fontSize: 9, color: "#777", marginTop: 3 }}>
+        {note || "Kindly make payment to the account details below:"}
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-around", gap: 12, marginTop: 10 }}>
+        {col("Bank", details.bank)}
+        {col("Account Number", details.account, true)}
+        {col("Account Name", details.accountName)}
+      </div>
+    </div>
+  );
+}
+
+/** "FIFTY MILLION NAIRA ONLY." -> "Fifty Million Naira Only" */
+export function titleCase(s: string) {
+  return s
+    .toLowerCase()
+    .replace(/\b[a-z]/g, (c) => c.toUpperCase())
+    .replace(/\.$/, "");
+}
+
+/**
+ * Signature slot in the modern document style. With `isSigningMode` and an
+ * `onSignClick` it renders a tap target instead of an empty rule.
+ */
+export function ModernSignSlot({
+  label,
+  signature,
+  date,
+  align = "left",
+  onSignClick,
+  isSigningMode,
+}: {
+  label: string;
+  signature?: string | null;
+  date?: string | null;
+  align?: "left" | "right";
+  onSignClick?: () => void;
+  isSigningMode?: boolean;
+}) {
+  return (
+    <div style={{ width: 215, textAlign: align }}>
+      <div
+        style={{
+          height: 42,
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: align === "right" ? "flex-end" : "flex-start",
+          paddingBottom: 3,
+        }}
+      >
+        {signature ? (
+          <img
+            src={signature}
+            alt={label}
+            style={{
+              maxHeight: 40,
+              maxWidth: 175,
+              objectFit: "contain",
+              filter: "brightness(0)",
+              WebkitFilter: "brightness(0)",
+              ...exactPrint,
+            } as React.CSSProperties}
+          />
+        ) : isSigningMode && onSignClick ? (
+          <button
+            type="button"
+            onClick={onSignClick}
+            className="animate-pulse"
+            style={{
+              height: 34,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              border: `1.5px dashed ${BRAND_RED}`,
+              borderRadius: 999,
+              padding: "0 14px",
+              background: BRAND_RED_SOFT,
+              color: BRAND_RED,
+              fontWeight: 700,
+              fontSize: 10.5,
+              cursor: "pointer",
+              ...exactPrint,
+            } as React.CSSProperties}
+          >
+            <PenLine style={{ width: 12, height: 12 }} /> Tap to Sign Here
+          </button>
+        ) : null}
+      </div>
+      <div style={{ borderTop: `1px solid ${INK}`, paddingTop: 4 }}>
+        <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", color: "#444" }}>
+          {label}
+        </div>
+        {date && (
+          <div style={{ fontSize: 8.5, color: "#888", marginTop: 1 }}>
+            {new Date(date).toLocaleDateString("en-GB")}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }

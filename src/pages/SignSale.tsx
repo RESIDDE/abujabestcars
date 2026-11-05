@@ -6,9 +6,9 @@ import { SignaturePad } from "@/components/SignaturePad";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { CheckCircle2, AlertCircle, Printer, Download, PenLine, FileText, ScrollText, ShieldCheck } from "lucide-react";
+import { CheckCircle2, AlertCircle, PenLine, ShieldCheck, Lock } from "lucide-react";
 import { logAction } from "@/lib/logger";
-import { SaleReceiptSheet, ReceiptType } from "@/components/sales/SalePrintPreview";
+import { SaleReceiptSheet } from "@/components/sales/SalePrintPreview";
 
 export default function SignSale() {
   const { id } = useParams<{ id: string }>();
@@ -43,19 +43,9 @@ export default function SignSale() {
   // Collect vehicles
   const vehiclesList = sale?.sale_vehicles?.map((sv: any) => sv.vehicle).filter(Boolean) || [];
 
-  // Determine initial template based on condition
-  const looksNigerianUsed = vehiclesList.some((v: any) =>
-    /nigerian|local|non[-\s]?reg/i.test(`${v?.condition || ""} ${v?.inventory_type || ""}`)
-  );
-  const [receiptType, setReceiptType] = useState<ReceiptType>(looksNigerianUsed ? "non_registered" : "registered");
-
-  // Keep receiptType updated once vehicle data loads
-  useState(() => {
-    if (looksNigerianUsed) setReceiptType("non_registered");
-  });
-
   const alreadySigned = Boolean(sale?.buyer_signature) || submitted;
-  const activeSignature = signature || sale?.buyer_signature || (sale?.customer as any)?.signature_data || null;
+  // Only this sale's own signature counts — never a signature carried over from another document.
+  const activeSignature = signature || sale?.buyer_signature || null;
   const activeSignatureDate = sale?.buyer_signature_date || (alreadySigned ? new Date().toISOString() : null);
 
   const scrollToSign = () => {
@@ -93,7 +83,7 @@ export default function SignSale() {
       });
       setSubmitted(true);
       await refetch();
-      toast.success("Signature recorded successfully!");
+      toast.success("Signed document successfully");
     }
   };
 
@@ -122,6 +112,31 @@ export default function SignSale() {
 
   return (
     <div className="min-h-screen bg-zinc-900 text-foreground py-8 px-4 flex flex-col items-center relative overflow-x-hidden">
+      {/* View-only copy: printing / "save as PDF" yields a notice instead of the document */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        .no-save img { -webkit-user-drag: none; user-select: none; }
+        @media print {
+          html, body { background: #fff !important; }
+          body * { visibility: hidden !important; }
+          .print-blocked, .print-blocked * { visibility: visible !important; }
+          .print-blocked {
+            position: fixed !important; inset: 0 !important;
+            display: flex !important; flex-direction: column;
+            align-items: center; justify-content: center; gap: 8px;
+            text-align: center; padding: 40px; color: #111;
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+          }
+        }
+      `}} />
+      <div className="print-blocked hidden">
+        <div style={{ fontSize: 20, fontWeight: 800, color: "#d9342b" }}>ABUJA BEST CARS LTD</div>
+        <div style={{ fontSize: 15, fontWeight: 700 }}>This copy cannot be printed or downloaded.</div>
+        <div style={{ fontSize: 12, color: "#555", maxWidth: 420 }}>
+          Your signed document is available to view online. Please contact Abuja Best Cars Ltd
+          on {"+234 903 995 4141"} to be issued your official copy.
+        </div>
+      </div>
+
       {/* Background ambient accents */}
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-red-600/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -133,12 +148,12 @@ export default function SignSale() {
           Official Abuja Best Cars LTD Customer Portal
         </div>
         <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-          Vehicle Sales Agreement & Receipt
+          Vehicle Invoice &amp; Receipt
         </h1>
         <p className="text-xs sm:text-sm text-zinc-400 mt-1">
           {alreadySigned
-            ? "Your purchase agreement has been signed and officially recorded."
-            : "Please review the agreement and receipt below, then provide your digital signature."}
+            ? "Signed document successfully. Your signature is now on the document below."
+            : "Please review the receipt below, then provide your digital signature."}
         </p>
 
         {/* Status banner */}
@@ -146,7 +161,7 @@ export default function SignSale() {
           {alreadySigned ? (
             <div className="inline-flex items-center gap-2 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-4 py-2 rounded-2xl text-xs font-bold">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              Document Officially Signed & Certified
+              Signed document successfully
             </div>
           ) : (
             <Button
@@ -157,49 +172,23 @@ export default function SignSale() {
             </Button>
           )}
 
-          <Button
-            variant="outline"
-            onClick={() => window.print()}
-            className="rounded-full gap-2 text-xs border-white/20 text-white hover:bg-white/10 h-10 px-5"
-          >
-            <Printer className="w-4 h-4" /> Print / Save PDF
-          </Button>
-        </div>
-
-        {/* Template Selector */}
-        <div className="grid grid-cols-2 gap-2 mt-5 max-w-md mx-auto">
-          {([
-            { id: "registered", title: "Cash/Credit Invoice", icon: FileText },
-            { id: "non_registered", title: "Sales Agreement Receipt", icon: ScrollText },
-          ] as const).map((opt) => {
-            const active = receiptType === opt.id;
-            const Icon = opt.icon;
-            return (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => setReceiptType(opt.id)}
-                className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl border text-xs font-bold transition-all ${
-                  active
-                    ? "border-[#d4ff32] bg-[#d4ff32]/20 text-[#d4ff32]"
-                    : "border-white/10 text-zinc-400 hover:border-white/20 hover:text-white"
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                <span>{opt.title}</span>
-              </button>
-            );
-          })}
+          <div className="inline-flex items-center gap-2 bg-white/5 text-zinc-400 border border-white/10 px-4 py-2 rounded-2xl text-[11px] font-semibold">
+            <Lock className="w-3.5 h-3.5" />
+            View only — this copy cannot be downloaded or printed
+          </div>
         </div>
       </header>
 
-      {/* The Printable A4 Sheet — Exactly matches the Receipt */}
-      <div className="w-full max-w-4xl flex justify-center overflow-x-auto z-10 pb-4">
+      {/* The A4 sheet — identical to the receipt issued by the office (view only) */}
+      <div
+        className="w-full max-w-4xl flex justify-center overflow-x-auto z-10 pb-4 no-save"
+        onContextMenu={(e) => e.preventDefault()}
+        onDragStart={(e) => e.preventDefault()}
+      >
         <SaleReceiptSheet
           sale={sale}
           customer={sale.customer}
           vehicles={vehiclesList}
-          receiptType={receiptType}
           customerSignature={activeSignature}
           customerSignatureDate={activeSignatureDate}
           repSignature={sale.rep_signature}
@@ -239,15 +228,24 @@ export default function SignSale() {
               disabled={!signature || saving}
               className="w-full mt-5 h-13 rounded-2xl bg-[#d4ff32] hover:brightness-105 text-black font-extrabold text-base shadow-xl active:scale-[0.99] transition-all disabled:opacity-40"
             >
-              {saving ? "Recording Signature..." : "Sign & Finalize Purchase"}
+              {saving ? "Signing document..." : "Done"}
             </Button>
           </Card>
         </div>
       )}
 
       {alreadySigned && (
-        <div className="mt-6 text-center text-xs text-zinc-400 print:hidden">
-          Need a copy? Use the <b>Print / Save PDF</b> button above to save your official receipt.
+        <div className="w-full max-w-2xl mt-8 z-10 print:hidden">
+          <Card className="bg-zinc-950 border-2 border-emerald-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl text-center">
+            <div className="w-14 h-14 rounded-2xl bg-emerald-500/15 flex items-center justify-center text-emerald-400 mx-auto">
+              <CheckCircle2 className="w-8 h-8" />
+            </div>
+            <h3 className="text-xl font-black text-white mt-4">Signed document successfully</h3>
+            <p className="text-xs text-zinc-400 mt-2 leading-relaxed">
+              Your signature has been recorded and now appears on the document above.
+              This page is view only — Abuja Best Cars Ltd will issue your official copy.
+            </p>
+          </Card>
         </div>
       )}
     </div>
