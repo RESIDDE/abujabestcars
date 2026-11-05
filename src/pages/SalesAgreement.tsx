@@ -170,22 +170,22 @@ export default function SalesAgreement() {
     queryKey: ["sales-agreement-history"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("sales_agreements")
+        .from("sales_agreements" as any)
         .select("*")
         .order("agreement_date", { ascending: false });
       if (error) throw error;
-      return data as SalesAgreementRecord[];
+      return (data || []) as unknown as SalesAgreementRecord[];
     },
   });
 
   const saveMutation = useMutation({
     mutationFn: async (payload: any) => {
       const { data, error } = await supabase
-        .from("sales_agreements")
+        .from("sales_agreements" as any)
         .upsert([payload])
         .select();
       if (error) throw error;
-      return data?.[0];
+      return (data as any)?.[0] as SalesAgreementRecord | undefined;
     },
     onSuccess: (savedItem) => {
       queryClient.invalidateQueries({ queryKey: ["sales-agreement-history"] });
@@ -207,7 +207,7 @@ export default function SalesAgreement() {
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
-        .from("sales_agreements")
+        .from("sales_agreements" as any)
         .delete()
         .eq("id", id);
       if (error) throw error;
