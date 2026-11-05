@@ -151,9 +151,10 @@ export const QuoteDocument = forwardRef<HTMLDivElement, { quote: any }>(({ quote
             <MetaLabel>Date issued</MetaLabel>
             <div style={{ fontSize: 12, fontWeight: 700, marginTop: 5 }}>{issued}</div>
 
-            {specs.length > 0 && (
+            {/* Single vehicle only — see the note on the sales receipt. */}
+            {specs.length === 1 && (
               <div style={{ marginTop: 15 }}>
-                <MetaLabel>{specs.length > 1 ? "Vehicles" : "Vehicle"}</MetaLabel>
+                <MetaLabel>Vehicle</MetaLabel>
                 {specs.map(({ spec }, i) => (
                   <div key={i} style={{ marginTop: 7 }}>
                     <div style={{ fontSize: 11.5, fontWeight: 700 }}>

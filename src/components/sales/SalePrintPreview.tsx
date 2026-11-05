@@ -106,9 +106,12 @@ function SalesReceipt(props: any) {
           <MetaLabel>Date issued</MetaLabel>
           <div style={{ fontSize: 12, fontWeight: 700, marginTop: 5 }}>{issued}</div>
 
-          {vehicleList?.length > 0 && (
+          {/* Only summarised for a single vehicle. On a multi-vehicle sale the
+              line items already carry each VIN, colour and mileage, so
+              repeating them here is duplication that costs a whole page. */}
+          {vehicleList?.length === 1 && (
             <div style={{ marginTop: 15 }}>
-              <MetaLabel>{vehicleList.length > 1 ? "Vehicles" : "Vehicle"}</MetaLabel>
+              <MetaLabel>Vehicle</MetaLabel>
               {vehicleList.map((v: any, i: number) => (
                 <div key={v?.id || i} style={{ marginTop: 7 }}>
                   <div style={{ fontSize: 11.5, fontWeight: 700 }}>
