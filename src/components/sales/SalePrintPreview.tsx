@@ -36,6 +36,31 @@ export interface SalePrintPreviewProps {
 
 const RED = BRAND_RED;
 
+/* ---------------------------------------------------------------- */
+/*  Receipt identity — shared so the ledger and the printed document */
+/*  always quote the same number for the same receipt.               */
+/* ---------------------------------------------------------------- */
+
+/** The date a receipt is issued on: the payment's date, else the sale's. */
+export function receiptDateOf(sale: any, payment?: any): string {
+  return payment?.payment_date || sale?.sale_date || sale?.created_at || new Date().toISOString();
+}
+
+/**
+ * The receipt number printed on the document, e.g. RCT-0611-1234.
+ *
+ * Derived from the record's own id and date, so it is stable: the same
+ * sale or payment always produces the same number, on every device and
+ * every re-print, without storing anything.
+ */
+export function buildReceiptNumber(sale: any, payment?: any): string {
+  const serial = (payment?.id || sale?.id || "").replace(/\D/g, "").slice(0, 4).padStart(4, "0");
+  const issuedOn = new Date(receiptDateOf(sale, payment));
+  return `RCT-${String(issuedOn.getDate()).padStart(2, "0")}${String(
+    issuedOn.getMonth() + 1
+  ).padStart(2, "0")}-${serial}`;
+}
+
 /* ---------- Sales Receipt ---------- */
 
 const exactPrint = { WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" } as React.CSSProperties;
@@ -321,12 +346,8 @@ export const SaleReceiptSheet = forwardRef<HTMLDivElement, SaleReceiptSheetProps
         : totalSalePrice;
     const balance = Math.max(0, totalSalePrice - amountPaid);
 
-    const receiptDate = payment?.payment_date || sale?.sale_date || sale?.created_at || new Date().toISOString();
-    const serial = (payment?.id || sale?.id || "").replace(/\D/g, "").slice(0, 4).padStart(4, "0");
-    const issuedOn = new Date(receiptDate);
-    const docNumber = `RCT-${String(issuedOn.getDate()).padStart(2, "0")}${String(
-      issuedOn.getMonth() + 1
-    ).padStart(2, "0")}-${serial}`;
+    const receiptDate = receiptDateOf(sale, payment);
+    const docNumber = buildReceiptNumber(sale, payment);
     const grandTotal = isPaymentReceipt ? paymentAmount : totalSalePrice;
     const amountWords = titleCase(numberToWords(grandTotal));
 

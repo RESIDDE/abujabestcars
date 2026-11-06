@@ -113,6 +113,57 @@ export default function VehiclesList() {
     },
   });
 
+  /**
+   * What each sold vehicle actually fetched.
+   *
+   * A vehicle's own `price` is the asking price; the figure it changed hands
+   * for lives on the sale. For a multi-vehicle sale the per-vehicle share is
+   * on the link row, falling back to an even split of the sale total.
+   */
+  const { data: saleRecords = [] } = useQuery({
+    queryKey: ["sales", "sold-prices"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sales")
+        .select("id, sale_price, sale_date, vehicle_id, sale_vehicles(vehicle_id, price)");
+      if (error) throw error;
+      return data as any[];
+    },
+  });
+
+  const soldInfoMap = useMemo(() => {
+    const map: Record<string, { price: number; date: string | null }> = {};
+
+    const consider = (vehicleId: string, price: number, date: string | null) => {
+      if (!vehicleId) return;
+      const existing = map[vehicleId];
+      // Keep the most recent sale, so a re-sold vehicle shows its latest price.
+      if (existing && existing.date && date && new Date(existing.date) >= new Date(date)) return;
+      map[vehicleId] = { price, date };
+    };
+
+    saleRecords.forEach((sale: any) => {
+      const links: any[] = sale.sale_vehicles || [];
+      if (links.length > 0) {
+        const evenShare = (Number(sale.sale_price) || 0) / links.length;
+        links.forEach((link: any) => {
+          const linked = Number(link.price) || 0;
+          consider(link.vehicle_id, linked > 0 ? linked : evenShare, sale.sale_date);
+        });
+      } else if (sale.vehicle_id) {
+        consider(sale.vehicle_id, Number(sale.sale_price) || 0, sale.sale_date);
+      }
+    });
+
+    return map;
+  }, [saleRecords]);
+
+  /** The figure to show for a vehicle: what it sold for, else what it is listed at. */
+  const displayPrice = (v: any) =>
+    v.status?.toLowerCase() === "sold" && soldInfoMap[v.id]?.price
+      ? soldInfoMap[v.id].price
+      : Number(v.price) || 0;
+
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("vehicles").delete().eq("id", id);
@@ -157,7 +208,10 @@ export default function VehiclesList() {
   const activeCount = activeVehicles.length;
   const soldCount = soldVehicles.length;
 
-  const soldRevenue = useMemo(() => soldVehicles.reduce((sum, v) => sum + (Number(v.price) || 0), 0), [soldVehicles]);
+  const soldRevenue = useMemo(
+    () => soldVehicles.reduce((sum, v) => sum + displayPrice(v), 0),
+    [soldVehicles, soldInfoMap]
+  );
   const soldCost = useMemo(() => soldVehicles.reduce((sum, v) => sum + (Number(v.cost_price) || 0), 0), [soldVehicles]);
   const soldProfit = soldRevenue - soldCost;
 
@@ -200,36 +254,37 @@ export default function VehiclesList() {
   const handleExportExcel = () => {
     const rows = filtered.map((v) => ({
       Make: v.make, Model: v.model, Year: v.year, VIN: v.vin || "", Color: v.color || "",
-      Price: v.price, "Cost Price": v.cost_price || "", Status: v.status, Condition: v.condition || "",
+      Price: v.price, "Sold Price": soldInfoMap[v.id]?.price || "", "Sold Date": soldInfoMap[v.id]?.date || "",
+      "Cost Price": v.cost_price || "", Status: v.status, Condition: v.condition || "",
       "Source Company": v.source_company || "", "Date Arrived": v.date_arrived || "",
     }));
     logAction("EXPORT", "Vehicle", "bulk", { format: "Excel", count: rows.length, tab: activeTab });
-    exportToExcel(rows, `Lamido_${activeTab}_vehicles_export`);
+    exportToExcel(rows, `AbujaBestCars_${activeTab}_vehicles_export`);
   };
 
   const handleExportCSV = () => {
     const rows = filtered.map((v) => ({
       Make: v.make, Model: v.model, Year: v.year, VIN: v.vin || "", Color: v.color || "",
-      Price: v.price, Status: v.status, Condition: v.condition || "",
+      Price: v.price, "Sold Price": soldInfoMap[v.id]?.price || "", Status: v.status, Condition: v.condition || "",
       Source: v.source_company || "", Date: v.date_arrived || "",
     }));
     logAction("EXPORT", "Vehicle", "bulk", { format: "CSV", count: rows.length, tab: activeTab });
-    exportToCSV(rows, `Lamido_${activeTab}_vehicles_export`);
+    exportToCSV(rows, `AbujaBestCars_${activeTab}_vehicles_export`);
   };
 
   const handleExportPDF = () => {
     const rows = filtered.map((v) => ({
       vehicle: `${v.year} ${v.make} ${v.model}`, 
       vin: v.vin || "—", 
-      price: `₦${Number(v.price).toLocaleString()}`,
+      price: `₦${displayPrice(v).toLocaleString()}`,
       status: v.status, 
       condition: v.condition || "—",
     }));
     logAction("EXPORT", "Vehicle", "bulk", { format: "PDF", count: rows.length, tab: activeTab });
-    exportToPDF(`Lamido ${activeTab === 'sold' ? 'Sold' : 'Active'} Vehicles Inventory`, rows, [
+    exportToPDF(`Abuja Best Cars — ${activeTab === 'sold' ? 'Sold' : 'Active'} Vehicles Inventory`, rows, [
       { key: "vehicle", label: "Vehicle Description" }, 
       { key: "vin", label: "VIN/Chassis" },
-      { key: "price", label: "Price" }, 
+      { key: "price", label: activeTab === 'sold' ? "Sold Price" : "Price" }, 
       { key: "status", label: "Status" }, 
       { key: "condition", label: "Condition" },
     ]);
@@ -242,13 +297,13 @@ export default function VehiclesList() {
 
   const handlePrint = () => {
     const rows = filtered.map((v) => ({
-      vehicle: `${v.year} ${v.make} ${v.model}`, vin: v.vin || "—", price: `₦${Number(v.price).toLocaleString()}`,
+      vehicle: `${v.year} ${v.make} ${v.model}`, vin: v.vin || "—", price: `₦${displayPrice(v).toLocaleString()}`,
       status: v.status, condition: v.condition || "—",
     }));
     logAction("PRINT", "Vehicle List", "bulk", { count: filtered.length, tab: activeTab });
-    printTable(`Lamido ${activeTab === 'sold' ? 'Sold' : 'Active'} Vehicles Inventory — Lamido Cars`, rows, [
+    printTable(`${activeTab === 'sold' ? 'Sold' : 'Active'} Vehicles Inventory — Abuja Best Cars`, rows, [
       { key: "vehicle", label: "Vehicle" }, { key: "vin", label: "VIN" },
-      { key: "price", label: "Price" }, { key: "status", label: "Status" }, { key: "condition", label: "Condition" },
+      { key: "price", label: activeTab === 'sold' ? "Sold Price" : "Price" }, { key: "status", label: "Status" }, { key: "condition", label: "Condition" },
     ]);
   };
 
@@ -697,6 +752,9 @@ export default function VehiclesList() {
             const dateStr = v.date_arrived ? new Date(v.date_arrived).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "In Stock";
             const isSold = v.status?.toLowerCase() === 'sold';
             const isAvailable = v.status?.toLowerCase() === 'available';
+            const soldInfo = isSold ? soldInfoMap[v.id] : undefined;
+            const shownPrice = displayPrice(v);
+            const listedPrice = Number(v.price) || 0;
 
             return (
               <div 
@@ -747,11 +805,13 @@ export default function VehiclesList() {
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                     <div>
                       <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
-                        CONDITION: {v.condition?.toUpperCase() || "USED"} • ARRIVED {dateStr}
+                        {soldInfo
+                          ? `SOLD FOR${soldInfo.date ? ` • ${new Date(soldInfo.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : ""}`
+                          : `CONDITION: ${v.condition?.toUpperCase() || "USED"} • ARRIVED ${dateStr}`}
                       </p>
                       <div className="flex items-center gap-3 flex-wrap">
-                        <h2 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight font-mono">
-                          ₦{Number(v.price).toLocaleString()}
+                        <h2 className={`text-2xl sm:text-3xl font-black tracking-tight font-mono ${soldInfo ? 'text-blue-500' : 'text-foreground'}`}>
+                          ₦{Number(shownPrice).toLocaleString()}
                         </h2>
                         {isAvailable ? (
                           <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">
@@ -770,6 +830,16 @@ export default function VehiclesList() {
                           </span>
                         )}
                       </div>
+                      {soldInfo && listedPrice > 0 && (
+                        <p className="text-[11px] text-muted-foreground mt-1.5">
+                          Listed at ₦{listedPrice.toLocaleString()}
+                          {listedPrice > 0 && shownPrice !== listedPrice && (
+                            <span className={shownPrice > listedPrice ? "text-emerald-500 font-semibold" : "text-amber-500 font-semibold"}>
+                              {" "}({shownPrice > listedPrice ? "+" : "−"}₦{Math.abs(shownPrice - listedPrice).toLocaleString()})
+                            </span>
+                          )}
+                        </p>
+                      )}
                     </div>
 
                     {/* Progress Bar (Matching reference image: "6/9 Challenges" style) */}
@@ -879,7 +949,9 @@ export default function VehiclesList() {
                     <TableCell>{v.condition || "—"}</TableCell>
                     <TableCell className="max-w-[120px] truncate" title={v.source_company}>{v.source_company || "—"}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{v.date_arrived ? new Date(v.date_arrived).toLocaleDateString() : "—"}</TableCell>
-                    <TableCell className="text-right font-bold text-sm font-mono">₦{Number(v.price).toLocaleString()}</TableCell>
+                    <TableCell className={`text-right font-bold text-sm font-mono ${v.status?.toLowerCase() === 'sold' && soldInfoMap[v.id]?.price ? 'text-blue-500' : ''}`}>
+                      ₦{displayPrice(v).toLocaleString()}
+                    </TableCell>
                     <TableCell>
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider ${
                         v.status?.toLowerCase() === 'available' ? 'bg-emerald-500/10 text-emerald-500' : 

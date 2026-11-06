@@ -14,7 +14,7 @@ export type PageKey =
 
 export const ALL_PAGES: { key: PageKey; label: string; path: string }[] = [
   { key: "dashboard",          label: "Dashboard",        path: "/dashboard" },
-  { key: "vehicles",           label: "Lamido Vehicles",  path: "/vehicles" },
+  { key: "vehicles",           label: "Vehicles",  path: "/vehicles" },
   { key: "customers",          label: "Customers",        path: "/customers" },
   { key: "sales",              label: "Sales",            path: "/sales" },
   { key: "inquiries",          label: "Inquiries",        path: "/inquiries" },

@@ -57,7 +57,7 @@ import { CurrencyInput } from "@/components/CurrencyInput";
 import { CustomerSelect } from "@/components/CustomerSelect";
 import { useCustomerDuplicates } from "@/hooks/useCustomerDuplicates";
 import { CustomerSuggestion } from "@/components/CustomerSuggestion";
-import { SalePrintPreview, exportSaleReceipt } from "@/components/sales/SalePrintPreview";
+import { SalePrintPreview, exportSaleReceipt, buildReceiptNumber, receiptDateOf } from "@/components/sales/SalePrintPreview";
 
 const COLORS = ["hsl(var(--primary))", "hsl(142 76% 36%)", "hsl(38 92% 50%)", "hsl(262 83% 58%)", "hsl(0 84% 60%)", "hsl(199 89% 48%)"];
 
@@ -77,9 +77,24 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
+type ManualVehicle = {
+  make: string;
+  model: string;
+  year: string;
+  trim: string;
+  color: string;
+  vin: string;
+  inventory_type: string;
+};
+
+const emptyManualVehicle: ManualVehicle = {
+  make: "", model: "", year: "", trim: "", color: "", vin: "", inventory_type: "Lamido",
+};
+
 const emptyForm = { 
   customer_id: "", 
   selected_vehicle_ids: [] as string[],
+  manual_vehicles: [] as ManualVehicle[],
   sale_price: "", 
   sale_date: new Date().toISOString().split("T")[0], 
   payment_type: "cash",
@@ -105,13 +120,15 @@ export default function Sales() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm, clearDraft] = useFormPersistence("sale", emptyForm, !!editId, editId || undefined);
+  const [form, setForm, clearDraft] = useFormPersistence("sale-v2", emptyForm, !!editId, editId || undefined);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [qrId, setQrId] = useState<string | null>(null);
   const [receiptSale, setReceiptSale] = useState<any>(null);
   const [search, setSearch] = useState("");
   const [sourceCompanyFilter, setSourceCompanyFilter] = useState("all");
   const [vehicleSearch, setVehicleSearch] = useState("");
+  const [manualVehicleOpen, setManualVehicleOpen] = useState(false);
+  const [manualVehicleDraft, setManualVehicleDraft] = useState<ManualVehicle>(emptyManualVehicle);
   const [page, setPage] = useState(0);
   const [showAnalytics, setShowAnalytics] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
@@ -132,6 +149,12 @@ export default function Sales() {
   const [previewPayment, setPreviewPayment] = useState<any>(null);
   const [previewPaymentIndex, setPreviewPaymentIndex] = useState<number | undefined>(undefined);
   const [previewAllPayments, setPreviewAllPayments] = useState<any[]>([]);
+
+  const [showReceipts, setShowReceipts] = useState(false);
+  const [receiptSearch, setReceiptSearch] = useState("");
+  const [receiptTypeFilter, setReceiptTypeFilter] = useState<"all" | "sale" | "payment">("all");
+  const [receiptPage, setReceiptPage] = useState(0);
+  const [receiptPageSize, setReceiptPageSize] = useState(10);
 
   const { data: sales = [], isLoading, isError } = useQuery({
     queryKey: ["sales"],
@@ -264,6 +287,191 @@ export default function Sales() {
     };
   };
 
+  /* ---------------------------------------------------------------- */
+  /*  Receipt ledger                                                   */
+  /*                                                                   */
+  /*  Every receipt the system can issue is derived from the sale and  */
+  /*  payment records themselves, so the ledger is a complete backup   */
+  /*  by construction: nothing can be printed that is missing here,    */
+  /*  and every entry re-opens the real document, numbered exactly as  */
+  /*  it was the first time it was printed.                           */
+  /* ---------------------------------------------------------------- */
+  const receiptRecords = useMemo(() => {
+    const records: any[] = [];
+
+    sales.forEach((sale: any) => {
+      const vIds: string[] = sale.sale_vehicles?.length > 0
+        ? sale.sale_vehicles.map((sv: any) => sv.vehicle_id)
+        : (sale.vehicle_id ? [sale.vehicle_id] : []);
+      const vObjs = vIds.map((id) => fullVehicleMap[id]).filter(Boolean);
+      const vehicleLabel = vObjs.length > 0
+        ? vObjs.map((v: any) => `${v.year} ${v.make} ${v.model}${v.trim ? ` ${v.trim}` : ""}`).join(", ")
+        : "—";
+      const vins = vObjs.map((v: any) => v.vin).filter(Boolean);
+      const customer = customerObjMap[sale.customer_id];
+      const salePrice = Number(sale.sale_price) || 0;
+
+      // Payments newest-first, matching the order the document expects.
+      const payments = [...(sale.sale_payments || [])].sort(
+        (a: any, b: any) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime()
+      );
+
+      const totalPaid = payments.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+
+      const base = {
+        sale,
+        customer,
+        customerName: customer?.name || "—",
+        customerPhone: customer?.phone || "",
+        vehicleLabel,
+        vins,
+        saleDate: sale.sale_date,
+      };
+
+      // The sale receipt — the full invoice for the transaction.
+      records.push({
+        ...base,
+        key: `sale-${sale.id}`,
+        type: "sale" as const,
+        typeLabel: "Sale receipt",
+        receiptNo: buildReceiptNumber(sale),
+        date: receiptDateOf(sale),
+        amount: salePrice,
+        statusLabel: payments.length === 0
+          ? (sale.payment_status === "deposit" ? "Balance due" : "Paid in full")
+          : (totalPaid >= salePrice ? "Paid in full" : "Balance due"),
+        payment: undefined,
+        paymentIndex: undefined,
+        allPayments: payments,
+      });
+
+      // One receipt per payment taken against the sale.
+      payments.forEach((p: any, descIndex: number) => {
+        const paidUpToThis = payments
+          .filter((_: any, i: number) => i >= descIndex)
+          .reduce((sum: number, px: any) => sum + (Number(px.amount) || 0), 0);
+        const positionFromEnd = payments.length - 1 - descIndex;
+        const ordinals = ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th"];
+        const settled = paidUpToThis >= salePrice;
+        records.push({
+          ...base,
+          key: `payment-${p.id}`,
+          type: "payment" as const,
+          typeLabel: settled
+            ? "Final payment"
+            : positionFromEnd === 0
+              ? "Deposit"
+              : `${ordinals[positionFromEnd] || `${positionFromEnd + 1}th`} payment`,
+          receiptNo: buildReceiptNumber(sale, p),
+          date: receiptDateOf(sale, p),
+          amount: Number(p.amount) || 0,
+          statusLabel: settled ? "Paid in full" : "Part payment",
+          paymentMethod: p.payment_method || "",
+          paymentNotes: p.notes || "",
+          payment: p,
+          paymentIndex: descIndex,
+          allPayments: payments,
+        });
+      });
+    });
+
+    // Everything searchable about a receipt, including the date written the
+    // several ways someone might type it (month name, day, year, slashes).
+    return records
+      .map((r) => {
+        const d = new Date(r.date);
+        const saleD = new Date(r.saleDate);
+        const dateForms = [d, saleD].flatMap((dt) =>
+          isNaN(dt.getTime()) ? [] : [
+            format(dt, "yyyy-MM-dd"),
+            format(dt, "dd/MM/yyyy"),
+            format(dt, "d MMMM yyyy"),
+            format(dt, "MMM"),
+            format(dt, "MMMM"),
+            format(dt, "EEEE"),
+            format(dt, "yyyy"),
+            String(dt.getDate()),
+          ]
+        );
+        return {
+          ...r,
+          haystack: [
+            r.receiptNo,
+            r.typeLabel,
+            r.customerName,
+            r.customerPhone,
+            r.vehicleLabel,
+            ...r.vins,
+            r.statusLabel,
+            r.paymentMethod || "",
+            r.paymentNotes || "",
+            String(r.amount),
+            r.amount.toLocaleString(),
+            r.sale.id,
+            r.payment?.id || "",
+            ...dateForms,
+          ].join(" ").toLowerCase(),
+        };
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [sales, fullVehicleMap, customerObjMap]);
+
+  const filteredReceipts = useMemo(() => {
+    const terms = receiptSearch.toLowerCase().split(/\s+/).filter(Boolean);
+    return receiptRecords.filter((r) => {
+      if (receiptTypeFilter !== "all" && r.type !== receiptTypeFilter) return false;
+      return terms.every((t) => r.haystack.includes(t));
+    });
+  }, [receiptRecords, receiptSearch, receiptTypeFilter]);
+
+  const receiptTotalPages = Math.max(1, Math.ceil(filteredReceipts.length / receiptPageSize));
+  const pagedReceipts = filteredReceipts.slice(
+    receiptPage * receiptPageSize,
+    (receiptPage + 1) * receiptPageSize
+  );
+
+  useEffect(() => { setReceiptPage(0); }, [receiptSearch, receiptTypeFilter, receiptPageSize]);
+
+  const openReceiptRecord = (r: any) => {
+    setPreviewSale(r.sale);
+    setPreviewPayment(r.payment || null);
+    setPreviewPaymentIndex(r.paymentIndex);
+    setPreviewAllPayments(r.allPayments || []);
+    setPrintMode(true);
+    logAction("PRINT", r.type === "payment" ? "Sales Payment" : "Sales", r.payment?.id || r.sale.id, {
+      receipt_no: r.receiptNo,
+    });
+  };
+
+  const downloadReceiptRecord = (r: any, type: 'pdf' | 'png' | 'jpeg') =>
+    downloadSaleReceipt(
+      r.sale,
+      type,
+      r.payment ? { payment: r.payment, paymentIndex: r.paymentIndex, allPayments: r.allPayments } : undefined
+    );
+
+  const exportReceiptLedger = (as: "excel" | "json") => {
+    const rows = filteredReceipts.map((r) => ({
+      "Receipt No": r.receiptNo,
+      Type: r.typeLabel,
+      "Receipt Date": format(new Date(r.date), "yyyy-MM-dd"),
+      "Sale Date": r.saleDate ? format(new Date(r.saleDate), "yyyy-MM-dd") : "",
+      Customer: r.customerName,
+      Phone: r.customerPhone,
+      Vehicle: r.vehicleLabel,
+      VIN: r.vins.join(", "),
+      Amount: r.amount,
+      Status: r.statusLabel,
+      Method: r.paymentMethod || "",
+      Notes: r.paymentNotes || "",
+      "Sale ID": r.sale.id,
+      "Payment ID": r.payment?.id || "",
+    }));
+    logAction("EXPORT", "Sales Receipts", "bulk", { format: as, count: rows.length });
+    if (as === "excel") exportToExcel(rows, "receipts_backup");
+    else exportToJSON(rows, "receipts_backup");
+  };
+
   const filtered = sales.filter((s) => {
     const q = search.toLowerCase();
     const vName = (vehicleMap[s.vehicle_id] || "").toLowerCase();
@@ -318,6 +526,28 @@ export default function Sales() {
 
       if (!finalCustomerId) throw new Error("Please select or enter a customer");
 
+      // Create records for vehicles typed in manually (not yet in inventory)
+      const createdVehicleIds: string[] = [];
+      for (const mv of (form.manual_vehicles || [])) {
+        const { data: newVeh, error: vErr } = await supabase.from("vehicles").insert({
+          make: mv.make.trim(),
+          model: mv.model.trim(),
+          year: parseInt(mv.year, 10) || new Date().getFullYear(),
+          trim: mv.trim?.trim() || null,
+          color: mv.color?.trim() || null,
+          vin: mv.vin.trim().toUpperCase().slice(0, 17),
+          status: "Sold",
+          inventory_type: mv.inventory_type || "Lamido",
+        }).select("id").single();
+        if (vErr) throw vErr;
+        createdVehicleIds.push(newVeh.id);
+      }
+
+      const allVehicleIds = [
+        ...form.selected_vehicle_ids.filter(vid => vehicles.some(v => v.id === vid)),
+        ...createdVehicleIds,
+      ];
+
       const payload = {
         customer_id: finalCustomerId,
         sale_price: parseFloat(form.sale_price),
@@ -330,7 +560,7 @@ export default function Sales() {
         buyer_signature_date: form.buyer_signature_date || null,
         notes: form.notes || null,
         // For backward compatibility, also keep first vehicle_id if any
-        vehicle_id: form.selected_vehicle_ids.filter(vid => vehicles.some(v => v.id === vid))[0] || null,
+        vehicle_id: allVehicleIds[0] || null,
       };
 
       let saleId = editId;
@@ -346,13 +576,11 @@ export default function Sales() {
         saleId = data.id;
       }
 
-      const validSelectedIds = form.selected_vehicle_ids.filter(vid => vehicles.some(v => v.id === vid));
-
-      if (validSelectedIds.length > 0) {
-        const links = validSelectedIds.map(vid => ({
+      if (allVehicleIds.length > 0) {
+        const links = allVehicleIds.map(vid => ({
           sale_id: saleId,
           vehicle_id: vid,
-          price: parseFloat(form.sale_price) / validSelectedIds.length // Provisional split
+          price: parseFloat(form.sale_price) / allVehicleIds.length // Provisional split
         }));
         const { error } = await supabase.from("sale_vehicles").insert(links);
         if (error) throw error;
@@ -361,7 +589,7 @@ export default function Sales() {
         const { error: vError } = await supabase
           .from("vehicles")
           .update({ status: "Sold" })
-          .in("id", validSelectedIds);
+          .in("id", allVehicleIds);
         if (vError) throw vError;
       }
 
@@ -380,11 +608,14 @@ export default function Sales() {
     onSuccess: (_, variables: any) => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
       queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["vehicles"] });
       const action = editId ? "UPDATE" : "CREATE";
       logAction(action, "Sales", editId ?? undefined);
       toast.success(`${editId ? "Sale updated" : "Sale recorded"} successfully. Please note it might take a moment to reflect across all views.`);
       clearDraft();
       setForm(emptyForm);
+      setManualVehicleDraft(emptyManualVehicle);
+      setManualVehicleOpen(false);
       setEditId(null);
       setDialogOpen(false);
     },
@@ -407,13 +638,26 @@ export default function Sales() {
     onError: () => toast.error("Failed to delete sale"),
   });
 
-  const closeDialog = () => { setDialogOpen(false); setEditId(null); };
+  const closeDialog = () => {
+    setDialogOpen(false);
+    // An edit's draft is keyed to that sale and is never restored into the
+    // edit form again, so keeping it can only leak that sale's vehicles and
+    // figures into the next new sale. Drop it on the way out.
+    if (editId) {
+      clearDraft();
+      setForm(emptyForm);
+    }
+    setEditId(null);
+    setManualVehicleOpen(false);
+    setManualVehicleDraft(emptyManualVehicle);
+  };
 
   const openEdit = (s: any) => {
     setEditId(s.id);
     setForm({
       customer_id: s.customer_id,
       selected_vehicle_ids: s.sale_vehicles?.map((sv: any) => sv.vehicle_id) || (s.vehicle_id ? [s.vehicle_id] : []),
+      manual_vehicles: [] as ManualVehicle[],
       sale_price: String(s.sale_price),
       sale_date: s.sale_date,
       payment_type: s.payment_type || "cash",
@@ -433,7 +677,41 @@ export default function Sales() {
     setDialogOpen(true);
   };
 
-  const canSubmit = (form.selected_vehicle_ids.length > 0) && (form.customer_id || (form.is_new_customer && form.manual_customer_name)) && form.sale_price && !upsertMutation.isPending;
+  /**
+   * Opens the dialog for a brand new sale.
+   *
+   * The form keeps a draft so an interrupted sale is not lost, but a draft
+   * left behind by an EDIT belongs to that sale alone: carried into a new
+   * sale it would silently record the previous sale's vehicle. So leaving
+   * an edit behind wipes the draft before the blank form opens.
+   */
+  const openCreate = () => {
+    if (editId) {
+      clearDraft();
+      setForm(emptyForm);
+    }
+    setEditId(null);
+    setManualVehicleOpen(false);
+    setManualVehicleDraft(emptyManualVehicle);
+    setDialogOpen(true);
+  };
+
+  /* A manually added vehicle is identified by its VIN, so the VIN is required
+     and must not already belong to a vehicle on record or to another vehicle
+     queued on this same sale — the VIN column is unique. */
+  const manualVin = manualVehicleDraft.vin.trim().toUpperCase();
+  const manualVehicleVinTaken =
+    manualVin.length > 0 &&
+    (vehicles.some((v: any) => (v.vin || "").trim().toUpperCase() === manualVin) ||
+      (form.manual_vehicles || []).some((mv) => mv.vin.trim().toUpperCase() === manualVin));
+  const manualVehicleReady =
+    manualVin.length > 0 &&
+    !manualVehicleVinTaken &&
+    manualVehicleDraft.make.trim().length > 0 &&
+    manualVehicleDraft.model.trim().length > 0 &&
+    manualVehicleDraft.year.trim().length > 0;
+
+  const canSubmit = (form.selected_vehicle_ids.length + (form.manual_vehicles?.length || 0) > 0) && (form.customer_id || (form.is_new_customer && form.manual_customer_name)) && form.sale_price && !upsertMutation.isPending;
 
   const handleExportExcel = () => {
     const rows = filtered.map((s) => ({
@@ -461,7 +739,7 @@ export default function Sales() {
       notes: s.notes || "",
     }));
     logAction("PRINT", "Sales List", "bulk", { count: rows.length });
-    printTable("Sales Report — Lamido Cars", rows, [
+    printTable("Sales Report — Abuja Best Cars", rows, [
       { key: "vehicle", label: "Vehicle" },
       { key: "customer", label: "Customer" },
       { key: "sale_price", label: "Sale Price" },
@@ -763,20 +1041,26 @@ export default function Sales() {
     }
   };
 
-  const downloadSaleReceipt = async (sale: any, type: 'pdf' | 'png' | 'jpeg') => {
-    const filename = `receipt-${sale.id.slice(0, 8)}`;
+  const downloadSaleReceipt = async (
+    sale: any,
+    type: 'pdf' | 'png' | 'jpeg',
+    receiptPayment?: { payment: any; paymentIndex: number; allPayments: any[] }
+  ) => {
+    const filename = `receipt-${buildReceiptNumber(sale, receiptPayment?.payment)}`;
 
     try {
       toast.loading(`Preparing ${type.toUpperCase()} download...`, { id: "sale-dl" });
 
       // Render the real receipt component so the file matches the document
       // on screen, and carries none of the browser's print furniture.
-      const payments = sale.sale_payments || [];
+      const payments = receiptPayment?.allPayments || sale.sale_payments || [];
       const blob = await exportSaleReceipt(
         {
           sale,
           customer: customerObjMap[sale.customer_id],
           vehicles,
+          payment: receiptPayment?.payment,
+          paymentIndex: receiptPayment?.paymentIndex,
           allPayments: payments,
           customerSignature: sale.buyer_signature || null,
           customerSignatureDate: sale.buyer_signature_date || null,
@@ -894,7 +1178,14 @@ export default function Sales() {
         </div>
         <div className="flex flex-row flex-wrap items-center gap-3 shrink-0">
           {canCreate(role, "sales", permissions) && (
-            <Button onClick={() => { setEditId(null); setDialogOpen(true); }} size="sm" className="rounded-xl transition-all font-semibold text-xs h-10 px-5 text-white" style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)" }}>
+            <Button
+              onClick={openCreate}
+              size="sm"
+              className="rounded-xl transition-all font-semibold text-xs h-10 px-5 text-white
+                         bg-[#181d2f] hover:bg-[#252c42] border border-black/10 shadow-md
+                         dark:bg-emerald-500 dark:hover:bg-emerald-400 dark:border-emerald-400/40
+                         dark:shadow-[0_0_18px_rgba(16,185,129,0.45)] dark:hover:shadow-[0_0_26px_rgba(16,185,129,0.65)]"
+            >
               <PlusCircle className="mr-2 h-4 w-4" /> Record Sale
             </Button>
           )}
@@ -905,6 +1196,15 @@ export default function Sales() {
             className={`rounded-xl glass-panel border-white/10 transition-all text-xs h-9 ${showAnalytics ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'hover:bg-white/5'}`}
           >
             <TrendingUp className="mr-1.5 h-3.5 w-3.5" /> {showAnalytics ? "Hide Analytics" : "Analytics"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowReceipts(!showReceipts)}
+            className={`rounded-xl glass-panel border-white/10 transition-all text-xs h-9 ${showReceipts ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : 'hover:bg-white/5'}`}
+          >
+            <Receipt className="mr-1.5 h-3.5 w-3.5" /> Receipts
+            <span className="ml-1.5 text-[10px] font-bold opacity-60">{receiptRecords.length}</span>
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -1038,6 +1338,155 @@ export default function Sales() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Receipt records — a searchable backup of every receipt issued */}
+      {showReceipts && (
+        <div className="glass-panel p-5 rounded-3xl flex flex-col gap-4 animate-fade-up">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Receipt className="w-3.5 h-3.5 text-amber-500" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-amber-500">Receipt Records</span>
+              </div>
+              <p className="text-xs text-white/40 mt-1">
+                Every sale and payment receipt, kept on record. Re-open, re-print or re-download any of them.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Select value={receiptTypeFilter} onValueChange={(v) => setReceiptTypeFilter(v as any)}>
+                <SelectTrigger className="h-9 w-[150px] rounded-xl bg-background/50 border-white/10 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="glass-panel border-white/10 rounded-xl">
+                  <SelectItem value="all">All receipts</SelectItem>
+                  <SelectItem value="sale">Sale receipts</SelectItem>
+                  <SelectItem value="payment">Payment receipts</SelectItem>
+                </SelectContent>
+              </Select>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="rounded-xl glass-panel border-white/10 hover:bg-white/5 text-xs h-9">
+                    <FileDown className="mr-1.5 h-3.5 w-3.5" /> Backup
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="rounded-xl glass-panel p-2 shadow-2xl border-white/10" align="end">
+                  <DropdownMenuItem className="rounded-lg text-xs cursor-pointer" onClick={() => exportReceiptLedger("excel")}>
+                    <FileOutput className="mr-2 h-3.5 w-3.5" /> Export to Excel
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="rounded-lg text-xs cursor-pointer" onClick={() => exportReceiptLedger("json")}>
+                    <FileText className="mr-2 h-3.5 w-3.5" /> Export as JSON
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+
+          <div className="relative w-full group">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-amber-500 transition-colors pointer-events-none" />
+            <Input
+              placeholder="Search receipt no, customer, car, VIN, date, month, day, amount..."
+              className="h-10 pl-10 rounded-xl bg-background/50 border-white/10 text-sm"
+              value={receiptSearch}
+              onChange={(e) => setReceiptSearch(e.target.value)}
+            />
+          </div>
+
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-white/5 hover:bg-transparent">
+                  <TableHead className="text-[10px] uppercase font-bold">Receipt No</TableHead>
+                  <TableHead className="text-[10px] uppercase font-bold">Type</TableHead>
+                  <TableHead className="text-[10px] uppercase font-bold">Date</TableHead>
+                  <TableHead className="text-[10px] uppercase font-bold">Customer</TableHead>
+                  <TableHead className="text-[10px] uppercase font-bold">Vehicle</TableHead>
+                  <TableHead className="text-[10px] uppercase font-bold text-right">Amount</TableHead>
+                  <TableHead className="text-[10px] uppercase font-bold text-right">Document</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pagedReceipts.map((r) => (
+                  <TableRow key={r.key} className="border-white/5 hover:bg-white/5">
+                    <TableCell className="py-3">
+                      <span className="text-xs font-mono font-bold">{r.receiptNo}</span>
+                      {r.vins.length > 0 && (
+                        <div className="text-[10px] text-muted-foreground font-mono truncate max-w-[150px]">VIN: {r.vins.join(", ")}</div>
+                      )}
+                    </TableCell>
+                    <TableCell className="py-3">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${
+                        r.type === "sale"
+                          ? "bg-sky-500/10 text-sky-500 border border-sky-500/20"
+                          : r.statusLabel === "Paid in full"
+                            ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
+                            : "bg-amber-500/10 text-amber-600 border border-amber-500/20"
+                      }`}>
+                        {r.typeLabel}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-xs py-3 whitespace-nowrap">
+                      {format(new Date(r.date), "d MMM yyyy")}
+                      {r.type === "payment" && r.saleDate && (
+                        <div className="text-[10px] text-muted-foreground">Sold {format(new Date(r.saleDate), "d MMM yyyy")}</div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs py-3 max-w-[140px] truncate">{r.customerName}</TableCell>
+                    <TableCell className="text-xs py-3 max-w-[180px] truncate">{r.vehicleLabel}</TableCell>
+                    <TableCell className="text-xs py-3 text-right font-bold whitespace-nowrap">₦{r.amount.toLocaleString()}</TableCell>
+                    <TableCell className="py-2 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 rounded-lg text-[10px] font-bold hover:bg-amber-500/10 hover:text-amber-500 gap-1"
+                          onClick={() => openReceiptRecord(r)}
+                        >
+                          <Printer className="h-3 w-3" /> Open
+                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-7 px-2 rounded-lg text-[10px] font-bold hover:bg-white/10 gap-1">
+                              <Download className="h-3 w-3" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent className="rounded-xl glass-panel p-2 shadow-2xl border-white/10" align="end">
+                            <DropdownMenuItem className="rounded-lg text-xs cursor-pointer" onClick={() => downloadReceiptRecord(r, "pdf")}>
+                              <FileDown className="mr-2 h-3.5 w-3.5" /> Download PDF
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="rounded-lg text-xs cursor-pointer" onClick={() => downloadReceiptRecord(r, "png")}>
+                              <Image className="mr-2 h-3.5 w-3.5" /> Download PNG
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="rounded-lg text-xs cursor-pointer" onClick={() => downloadReceiptRecord(r, "jpeg")}>
+                              <Image className="mr-2 h-3.5 w-3.5" /> Download JPEG
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {filteredReceipts.length === 0 && (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8 italic">
+                      {receiptRecords.length === 0 ? "No receipts yet — record a sale to issue one." : "No receipt matches that search."}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          <CustomPagination
+            currentPage={receiptPage}
+            totalPages={receiptTotalPages}
+            totalItems={filteredReceipts.length}
+            pageSize={receiptPageSize}
+            onPageChange={setReceiptPage}
+            onPageSizeChange={setReceiptPageSize}
+            itemLabel="receipts"
+          />
         </div>
       )}
 
@@ -1185,7 +1634,13 @@ export default function Sales() {
           <h3 className="text-xl font-bold mb-2">No Sales Recorded</h3>
           <p className="text-muted-foreground max-w-xs mx-auto mb-6">You haven't recorded any sales yet. Click "Record New Sale" to get started.</p>
           {canCreate(role, "sales", permissions) && (
-            <Button onClick={() => setDialogOpen(true)} className="rounded-full px-6 py-2.5 bg-[#181d2f] hover:bg-[#252c42] dark:bg-white dark:hover:bg-slate-200 text-white dark:text-slate-900 font-bold text-xs shadow-lg transition-all">
+            <Button
+              onClick={openCreate}
+              className="rounded-full px-6 py-2.5 font-bold text-xs text-white transition-all shadow-lg
+                         bg-[#181d2f] hover:bg-[#252c42]
+                         dark:bg-emerald-500 dark:hover:bg-emerald-400
+                         dark:shadow-[0_0_18px_rgba(16,185,129,0.45)] dark:hover:shadow-[0_0_26px_rgba(16,185,129,0.65)]"
+            >
               Record Your First Sale
             </Button>
           )}
@@ -1634,7 +2089,7 @@ export default function Sales() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Select Vehicles *</Label>
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Vehicles *</Label>
               <div className="bg-foreground/5 border border-white/5 p-4 rounded-2xl flex flex-col gap-3">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
@@ -1674,6 +2129,188 @@ export default function Sales() {
                      <div className="col-span-1 sm:col-span-2 text-center text-sm text-muted-foreground py-4 italic">No matching vehicles found.</div>
                   )}
                 </div>
+
+                {form.manual_vehicles?.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Added manually (will be created on save)</Label>
+                    {form.manual_vehicles.map((mv, i) => (
+                      <div key={i} className="flex items-center gap-3 p-3 rounded-xl border bg-amber-500/10 border-amber-500/20">
+                        <Car className="h-4 w-4 text-amber-500 shrink-0" />
+                        <div className="flex flex-col leading-tight flex-1 min-w-0">
+                          <span className="text-[13px] font-medium truncate">{mv.year} {mv.make} {mv.model} {mv.trim}</span>
+                          <span className="text-[10px] text-muted-foreground font-mono truncate">
+                            VIN: {mv.vin}{mv.color ? ` · ${mv.color}` : ""}
+                          </span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive shrink-0"
+                          onClick={() => setForm({ ...form, manual_vehicles: form.manual_vehicles.filter((_, idx) => idx !== i) })}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {!manualVehicleOpen ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl h-10 border-dashed border-white/20 text-xs font-semibold hover:border-amber-500/40 hover:text-amber-500"
+                    onClick={() => setManualVehicleOpen(true)}
+                  >
+                    <PlusCircle className="h-3.5 w-3.5 mr-2" />
+                    Vehicle not in inventory? Add it manually
+                  </Button>
+                ) : (
+                  <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] overflow-hidden">
+                    {/* Header */}
+                    <div className="flex items-center gap-3 px-4 py-3 border-b border-amber-500/15 bg-amber-500/[0.06]">
+                      <div className="h-7 w-7 rounded-lg bg-amber-500/15 flex items-center justify-center shrink-0">
+                        <Car className="h-3.5 w-3.5 text-amber-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-amber-500 leading-tight">Add a vehicle to inventory</p>
+                        <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">
+                          It is created as Sold and attached to this sale.
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-[11px] shrink-0"
+                        onClick={() => { setManualVehicleOpen(false); setManualVehicleDraft(emptyManualVehicle); }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+
+                    <div className="p-4 flex flex-col gap-4">
+                      {/* VIN leads: it is the vehicle's identity and the one field that must be right */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-baseline justify-between gap-2 ml-1">
+                          <Label className="text-[10px] uppercase font-bold text-muted-foreground">
+                            Chassis No. (VIN) <span className="text-amber-500">*</span>
+                          </Label>
+                          <span className={`text-[10px] font-mono tabular-nums ${
+                            manualVehicleDraft.vin.length === 17
+                              ? "text-emerald-500"
+                              : manualVehicleDraft.vin.length > 0
+                                ? "text-amber-500"
+                                : "text-muted-foreground/60"
+                          }`}>
+                            {manualVehicleDraft.vin.length}/17
+                          </span>
+                        </div>
+                        <Input
+                          autoFocus
+                          className={`rounded-lg h-11 bg-background/60 font-mono text-sm tracking-[0.12em] uppercase ${
+                            manualVehicleVinTaken ? "border-destructive/60 focus-visible:ring-destructive" : "border-white/10"
+                          }`}
+                          placeholder="17-CHARACTER VIN"
+                          maxLength={17}
+                          value={manualVehicleDraft.vin}
+                          onChange={(e) => setManualVehicleDraft({
+                            ...manualVehicleDraft,
+                            vin: e.target.value.toUpperCase().replace(/\s/g, "").slice(0, 17),
+                          })}
+                        />
+                        {manualVehicleVinTaken ? (
+                          <p className="text-[10px] text-destructive font-semibold ml-1 flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3 shrink-0" />
+                            That VIN already belongs to a vehicle — pick it from the list above instead.
+                          </p>
+                        ) : (
+                          <p className="text-[10px] text-muted-foreground/70 ml-1">
+                            Required. A VIN is normally 17 characters.
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Make · Model · Year */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className="space-y-1.5 col-span-1 sm:col-span-2">
+                          <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">
+                            Make <span className="text-amber-500">*</span>
+                          </Label>
+                          <Input
+                            className="rounded-lg h-10 bg-background/60 border-white/10"
+                            placeholder="Toyota"
+                            value={manualVehicleDraft.make}
+                            onChange={(e) => setManualVehicleDraft({ ...manualVehicleDraft, make: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-1.5 col-span-1 sm:col-span-2">
+                          <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">
+                            Model <span className="text-amber-500">*</span>
+                          </Label>
+                          <Input
+                            className="rounded-lg h-10 bg-background/60 border-white/10"
+                            placeholder="Camry"
+                            value={manualVehicleDraft.model}
+                            onChange={(e) => setManualVehicleDraft({ ...manualVehicleDraft, model: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">
+                            Year <span className="text-amber-500">*</span>
+                          </Label>
+                          <Input
+                            className="rounded-lg h-10 bg-background/60 border-white/10 tabular-nums"
+                            type="number"
+                            inputMode="numeric"
+                            placeholder="2015"
+                            value={manualVehicleDraft.year}
+                            onChange={(e) => setManualVehicleDraft({ ...manualVehicleDraft, year: e.target.value.slice(0, 4) })}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Trim</Label>
+                          <Input
+                            className="rounded-lg h-10 bg-background/60 border-white/10"
+                            placeholder="XLE"
+                            value={manualVehicleDraft.trim}
+                            onChange={(e) => setManualVehicleDraft({ ...manualVehicleDraft, trim: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-1.5 col-span-2">
+                          <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Colour</Label>
+                          <Input
+                            className="rounded-lg h-10 bg-background/60 border-white/10"
+                            placeholder="Black"
+                            value={manualVehicleDraft.color}
+                            onChange={(e) => setManualVehicleDraft({ ...manualVehicleDraft, color: e.target.value })}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3 pt-1">
+                        <p className="text-[10px] text-muted-foreground/70 leading-snug">
+                          The sale price is taken from the sale below.
+                        </p>
+                        <Button
+                          type="button"
+                          className="rounded-xl h-10 px-5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shrink-0 disabled:opacity-40"
+                          disabled={!manualVehicleReady}
+                          onClick={() => {
+                            setForm({ ...form, manual_vehicles: [...(form.manual_vehicles || []), manualVehicleDraft] });
+                            setManualVehicleDraft(emptyManualVehicle);
+                            setManualVehicleOpen(false);
+                            toast.success("Vehicle added to this sale");
+                          }}
+                        >
+                          <PlusCircle className="h-3.5 w-3.5 mr-2" />
+                          Add to this sale
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

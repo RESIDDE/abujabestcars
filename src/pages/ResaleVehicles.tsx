@@ -231,7 +231,7 @@ export default function ResaleVehicles() {
       status: v.status, accepted_by: v.accepted_by_name || "—", accepted_date: v.accepted_date || "—",
     }));
     logAction("PRINT", "Resale Vehicle List", "bulk", { count: filtered.length });
-    printTable("Resale Vehicles Inventory — Lamido Cars", rows, [
+    printTable("Resale Vehicles Inventory — Abuja Best Cars", rows, [
       { key: "vehicle", label: "Vehicle" }, { key: "vin", label: "VIN" },
       { key: "price", label: "Price" }, { key: "status", label: "Status" }, 
       { key: "accepted_by", label: "Accepted By" }, { key: "accepted_date", label: "Date" },

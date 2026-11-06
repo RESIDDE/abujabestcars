@@ -524,20 +524,6 @@ export default function VehicleForm() {
             {field("date_arrived", "Date Arrived", "date")}
             {field("date_stored", "Date Stored", "date")}
             {field("num_keys", "Number of Keys", "number")}
-            
-            <div className="space-y-1">
-              <Label>Inventory Type</Label>
-              <Select
-                value={form.inventory_type}
-                onValueChange={(v) => setForm({ ...form, inventory_type: v })}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Lamido">Lamido Inventory</SelectItem>
-                  <SelectItem value="resale">Resale Inventory</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </CardContent>
         </Card>
 

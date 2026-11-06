@@ -684,7 +684,7 @@ export default function AdvancedReport() {
       { metric: "Repair Jobs", value: String(fRepairs.length) },
       { metric: "Business Health Score", value: `${healthScore}/100` },
     ];
-    exportToExcel(summaryRows, `lamido_cars_advanced_report_${selectedMonth}`);
+    exportToExcel(summaryRows, `abuja_best_cars_advanced_report_${selectedMonth}`);
     logAction("EXPORT_EXCEL", "AdvancedReport", "summary");
   };
 
@@ -703,7 +703,7 @@ export default function AdvancedReport() {
       { metric: "Conversion Rate", value: `${conversionRate.toFixed(1)}%` },
       { metric: "Business Health Score", value: `${healthScore}/100` },
     ];
-    exportToCSV(summaryRows, `lamido_cars_advanced_report_${selectedMonth}`);
+    exportToCSV(summaryRows, `abuja_best_cars_advanced_report_${selectedMonth}`);
     logAction("EXPORT_CSV", "AdvancedReport", "summary");
   };
 
