@@ -393,7 +393,14 @@ export function QuotePrintPreview({ quote, onBack, onDownloadPdf }: QuotePrintPr
             width: 100% !important; margin: 0 !important; padding: 0 !important; display: block !important;
           }
           .print-document-page {
-            position: relative !important; width: 210mm !important; min-height: 297mm !important;
+          /* Content-driven height, not a hard 297mm. With "Default" margins a
+             browser uses the printer's hardware margins, so the printable area
+             is shorter than a full A4 page and a sheet pinned to 297mm spills a
+             nearly empty second page. break-inside keeps the document whole
+             when it does fit. */
+            position: relative !important; width: 210mm !important;
+            min-height: 0 !important; height: auto !important;
+            page-break-inside: avoid !important; break-inside: avoid !important;
             margin: 0 auto !important; padding: 12mm 14mm !important;
             border: none !important; box-shadow: none !important; background: white !important;
           }

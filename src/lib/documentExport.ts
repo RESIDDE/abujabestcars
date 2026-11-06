@@ -62,7 +62,11 @@ export async function captureDocumentElement(
     );
 
     const { toPng, toJpeg } = await import("html-to-image");
-    const opts = { pixelRatio: 2, backgroundColor: "#ffffff", cacheBust: true };
+    // No cacheBust: it re-fetches each image with a ?t= query, which can fail
+    // on hashed, long-cached production assets and silently drop the logo and
+    // watermark from the file. The images are already decoded by the wait
+    // above, so the cached copies are exactly what we want.
+    const opts = { pixelRatio: 2, backgroundColor: "#ffffff" };
 
     if (format === "png") {
       return await fetch(await toPng(el, opts)).then((r) => r.blob());
