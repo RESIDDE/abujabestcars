@@ -12,6 +12,7 @@ import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { DocumentScaleSync } from "@/hooks/useDocumentScale";
+import { PrintFitSync } from "@/hooks/usePrintFit";
 import { ZoomLock } from "@/hooks/useZoomLock";
 import { PrintTitleGuard } from "@/hooks/usePrintTitle";
 
@@ -180,6 +181,7 @@ const App = () => (
           <PermissionsRealtimeSync />
           {/* Keeps A4 document sheets scaled to the screen on phones */}
           <DocumentScaleSync />
+          <PrintFitSync />
           {/* iOS ignores user-scalable=no, so pinch-zoom is blocked here too */}
           <ZoomLock />
           {/* Keeps the site name out of the printed page header */}

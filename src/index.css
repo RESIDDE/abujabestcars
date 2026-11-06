@@ -354,6 +354,15 @@
     size: auto;
   }
 
+  /* A document sheet taller than one A4 page is scaled to fit it, rather than
+     spilling its footer onto a second sheet. <PrintFitSync /> measures each
+     sheet and sets --print-zoom; one that already fits keeps zoom 1. */
+  .print-document-page {
+    zoom: var(--print-zoom, 1);
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;

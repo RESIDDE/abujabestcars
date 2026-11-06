@@ -65,6 +65,30 @@ export function buildReceiptNumber(sale: any, payment?: any): string {
 
 const exactPrint = { WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" } as React.CSSProperties;
 
+/** A labelled rule to write on, printed whether or not it already has a value. */
+function FormLine({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div style={{ marginTop: 5 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+        <span style={{ fontSize: 9.5, color: "#777", whiteSpace: "nowrap" }}>{label}:</span>
+        <span
+          style={{
+            flex: 1,
+            borderBottom: `1px solid ${RULE}`,
+            fontSize: 10.5,
+            fontWeight: 600,
+            minHeight: 14,
+            paddingBottom: 1,
+            ...exactPrint,
+          }}
+        >
+          {value || "\u00A0"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function SalesReceipt(props: any) {
   const {
     docNumber,
@@ -86,6 +110,8 @@ function SalesReceipt(props: any) {
     repSignatureDate,
     onSignClick,
     isSigningMode,
+    registered,
+    agreement,
   } = props;
 
   const money = (n: number) => `₦${Math.round(Number(n) || 0).toLocaleString()}`;
@@ -113,7 +139,7 @@ function SalesReceipt(props: any) {
 
   return (
     <div style={{ fontFamily: MODERN_FONT, color: INK }}>
-      <ModernLetterhead docTitle="Receipt" docNumber={docNumber} />
+      <ModernLetterhead docTitle={registered ? "Vehicle Sales Agreement Receipt" : "Receipt"} docNumber={docNumber} />
 
       <div style={{ height: 1, background: RULE, margin: "15px 0 17px", ...exactPrint }} />
 
@@ -247,17 +273,128 @@ function SalesReceipt(props: any) {
         />
       </div>
 
+      {/* Registered vehicle: witnesses, seller and the as-is clause */}
+      {registered && (
+        <div style={{ marginTop: 16, position: "relative", zIndex: 1 }}>
+          <div style={{ height: 1, background: RULE, marginBottom: 11, ...exactPrint }} />
+
+          <MetaLabel>In the presence of the following witnesses</MetaLabel>
+          <div style={{ display: "flex", gap: 26, marginTop: 8 }}>
+            {[0, 1].map((i) => {
+              const w = agreement?.witnesses?.[i] || {};
+              return (
+                <div key={i} style={{ flex: 1 }}>
+                  <FormLine label="Name" value={w.name} />
+                  <FormLine label="Address" value={w.address} />
+                  <FormLine label="Occupation" value={w.occupation} />
+                  <FormLine label="Signature" value="" />
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{ display: "flex", gap: 26, marginTop: 12, alignItems: "flex-start" }}>
+            <div style={{ flex: 1 }}>
+              <MetaLabel>Sold by</MetaLabel>
+              <div style={{ marginTop: 8 }}>
+                <FormLine label="Name" value={agreement?.sold_by?.name} />
+                <FormLine label="Address" value={agreement?.sold_by?.address} />
+                <FormLine label="Occupation" value={agreement?.sold_by?.occupation} />
+                <FormLine label="Signature" value="" />
+              </div>
+            </div>
+
+            <div
+              style={{
+                flex: 1,
+                border: `1px solid ${RED}`,
+                borderRadius: 8,
+                padding: "10px 12px",
+                marginTop: 14,
+                ...exactPrint,
+              }}
+            >
+              <div style={{ fontSize: 9, fontWeight: 800, color: RED, textTransform: "uppercase", letterSpacing: 0.6, ...exactPrint }}>
+                Note
+              </div>
+              <div style={{ fontSize: 10, lineHeight: 1.5, marginTop: 4 }}>
+                Vehicle has been tested and certified by the buyer and will be purchased &ldquo;as is&rdquo;.
+                Therefore, there shall be no refund of money or vehicle after payment.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Buyer's acceptance — ticked on the agreement, with the date it was received */}
+      {registered && (
+        <div
+          style={{
+            marginTop: 12,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            border: `1px solid ${RULE}`,
+            borderRadius: 8,
+            padding: "9px 12px",
+            position: "relative",
+            zIndex: 1,
+            ...exactPrint,
+          }}
+        >
+          <span
+            style={{
+              width: 13,
+              height: 13,
+              border: `1.5px solid ${agreement?.received_good_condition ? POSITIVE : "#999"}`,
+              borderRadius: 3,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 11,
+              fontWeight: 900,
+              lineHeight: 1,
+              color: POSITIVE,
+              flexShrink: 0,
+              ...exactPrint,
+            }}
+          >
+            {agreement?.received_good_condition ? "✓" : ""}
+          </span>
+          <span style={{ fontSize: 10.5, fontWeight: 700 }}>
+            Vehicle received in good condition (Buyer)
+          </span>
+          <span style={{ marginLeft: "auto", display: "flex", alignItems: "baseline", gap: 6, minWidth: 170 }}>
+            <span style={{ fontSize: 9.5, color: "#777" }}>Date:</span>
+            <span
+              style={{
+                flex: 1,
+                borderBottom: `1px solid ${RULE}`,
+                fontSize: 10.5,
+                fontWeight: 600,
+                paddingBottom: 1,
+                ...exactPrint,
+              }}
+            >
+              {agreement?.received_date
+                ? new Date(agreement.received_date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+                : "\u00A0"}
+            </span>
+          </span>
+        </div>
+      )}
+
       {/* Signatures */}
       <div style={{ marginTop: 24, display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 24, position: "relative", zIndex: 1 }}>
         <ModernSignSlot
-          label="Customer's Signature"
+          label={registered ? "Vehicle received in good condition (Buyer)" : "Customer's Signature"}
           signature={customerSignature}
           date={customerSignatureDate}
           onSignClick={onSignClick}
           isSigningMode={isSigningMode}
         />
         <ModernSignSlot
-          label="For Abuja Best Cars Ltd"
+          label={registered ? "Managing Director, Abuja Best Cars Ltd" : "For Abuja Best Cars Ltd"}
           signature={repSignature}
           date={repSignatureDate}
           align="right"
@@ -382,6 +519,8 @@ export const SaleReceiptSheet = forwardRef<HTMLDivElement, SaleReceiptSheetProps
           tag: v?.trim || v?.condition || "",
           sub: [
             v?.vin ? `VIN: ${v.vin}` : null,
+            sale?.agreement_details?.engine_no ? `Engine: ${sale.agreement_details.engine_no}` : null,
+            sale?.agreement_details?.registration_no ? `Reg: ${sale.agreement_details.registration_no}` : null,
             v?.color ? `Colour: ${v.color}` : null,
             v?.transmission || null,
             v?.mileage ? `${Number(v.mileage).toLocaleString()} km` : null,
@@ -418,6 +557,10 @@ export const SaleReceiptSheet = forwardRef<HTMLDivElement, SaleReceiptSheetProps
       repSignatureDate,
       onSignClick,
       isSigningMode,
+      // The agreement form only applies to the sale itself, not to a receipt
+      // for one of its payments.
+      registered: !!sale?.is_registered && !isPaymentReceipt,
+      agreement: sale?.agreement_details || null,
     };
 
     const receiptProps = shared;

@@ -51,6 +51,7 @@ import { numberToWords } from "@/lib/numberToWords";
 import { logAction } from "@/lib/logger";
 
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { SignaturePad } from "@/components/SignaturePad";
 import { QrSignDialog } from "@/lib/qrHelpers";
 import { CurrencyInput } from "@/components/CurrencyInput";
@@ -111,6 +112,21 @@ const emptyForm = {
   manual_customer_email: "",
   manual_customer_address: "",
   initial_payment: "",
+  // Registered-vehicle agreement (the booklet form)
+  is_registered: false,
+  engine_no: "",
+  registration_no: "",
+  witness1_name: "",
+  witness1_address: "",
+  witness1_occupation: "",
+  witness2_name: "",
+  witness2_address: "",
+  witness2_occupation: "",
+  sold_by_name: "",
+  sold_by_address: "",
+  sold_by_occupation: "",
+  received_good_condition: false,
+  received_date: "",
 };
 
 export default function Sales() {
@@ -510,6 +526,13 @@ export default function Sales() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const paged = filtered.slice(page * pageSize, (page + 1) * pageSize);
 
+  /** Told once per save when the sale saved but its agreement details could not. */
+  const warnAgreementColumnsMissing = () =>
+    toast.warning(
+      "Saved, but the registered-vehicle details were not stored — the database is missing the agreement columns. Run the latest migration.",
+      { duration: 9000, id: "agreement-columns" }
+    );
+
   const upsertMutation = useMutation({
     mutationFn: async () => {
       let finalCustomerId = form.customer_id;
@@ -527,20 +550,62 @@ export default function Sales() {
 
       if (!finalCustomerId) throw new Error("Please select or enter a customer");
 
-      // Create records for vehicles typed in manually (not yet in inventory)
+      /* Vehicles typed in by hand.
+       *
+       * The VIN identifies the car and the column is unique, so this reuses
+       * the record when one already carries that VIN instead of inserting a
+       * second. That matters on a retry: if an earlier attempt created the
+       * vehicle and then failed further down, saving again must attach that
+       * vehicle rather than collide with it. It also covers VINs the picker
+       * never shows, such as a car sitting in the service inventory.
+       */
       const createdVehicleIds: string[] = [];
       for (const mv of (form.manual_vehicles || [])) {
-        const { data: newVeh, error: vErr } = await supabase.from("vehicles").insert({
+        const vin = mv.vin.trim().toUpperCase().slice(0, 17);
+        const details = {
           make: mv.make.trim(),
           model: mv.model.trim(),
           year: parseInt(mv.year, 10) || new Date().getFullYear(),
           trim: mv.trim?.trim() || null,
           color: mv.color?.trim() || null,
-          vin: mv.vin.trim().toUpperCase().slice(0, 17),
+        };
+
+        const { data: existing, error: lookupErr } = await supabase
+          .from("vehicles")
+          .select("id")
+          .eq("vin", vin)
+          .maybeSingle();
+        if (lookupErr) throw lookupErr;
+
+        if (existing) {
+          const { error: updErr } = await supabase
+            .from("vehicles")
+            .update({ ...details, status: "Sold" })
+            .eq("id", existing.id);
+          if (updErr) throw updErr;
+          createdVehicleIds.push(existing.id);
+          continue;
+        }
+
+        const { data: newVeh, error: vErr } = await supabase.from("vehicles").insert({
+          ...details,
+          vin,
           status: "Sold",
           inventory_type: mv.inventory_type || "Lamido",
         }).select("id").single();
-        if (vErr) throw vErr;
+
+        if (vErr) {
+          // Lost a race on the unique VIN — take the record that won.
+          if (vErr.code === "23505") {
+            const { data: raced } = await supabase.from("vehicles").select("id").eq("vin", vin).maybeSingle();
+            if (raced) {
+              await supabase.from("vehicles").update({ ...details, status: "Sold" }).eq("id", raced.id);
+              createdVehicleIds.push(raced.id);
+              continue;
+            }
+          }
+          throw vErr;
+        }
         createdVehicleIds.push(newVeh.id);
       }
 
@@ -562,16 +627,65 @@ export default function Sales() {
         notes: form.notes || null,
         // For backward compatibility, also keep first vehicle_id if any
         vehicle_id: allVehicleIds[0] || null,
+      } as any;
+
+      // Registered vehicles are documented on the agreement form, which
+      // carries witnesses and the seller's details; unregistered sales use
+      // the plain receipt and store none of it.
+      payload.is_registered = !!form.is_registered;
+      payload.agreement_details = form.is_registered
+        ? {
+            engine_no: form.engine_no?.trim() || null,
+            registration_no: form.registration_no?.trim().toUpperCase() || null,
+            witnesses: [
+              {
+                name: form.witness1_name?.trim() || null,
+                address: form.witness1_address?.trim() || null,
+                occupation: form.witness1_occupation?.trim() || null,
+              },
+              {
+                name: form.witness2_name?.trim() || null,
+                address: form.witness2_address?.trim() || null,
+                occupation: form.witness2_occupation?.trim() || null,
+              },
+            ],
+            sold_by: {
+              name: form.sold_by_name?.trim() || null,
+              address: form.sold_by_address?.trim() || null,
+              occupation: form.sold_by_occupation?.trim() || null,
+            },
+            received_good_condition: !!form.received_good_condition,
+            received_date: form.received_good_condition ? form.received_date || null : null,
+          }
+        : null;
+
+      /* The agreement columns arrive with a migration. Until it is applied the
+         database rejects them, and a sale must not be lost over a column: drop
+         them, save the sale, and say what is missing. */
+      const withoutAgreementColumns = () => {
+        const { is_registered, agreement_details, ...rest } = payload;
+        return rest;
       };
+      const isMissingColumn = (error: any) =>
+        error?.code === "42703" ||
+        /column .*(is_registered|agreement_details)/i.test(error?.message || "");
 
       let saleId = editId;
       if (editId) {
-        const { error } = await supabase.from("sales").update(payload).eq("id", editId);
+        let { error } = await supabase.from("sales").update(payload).eq("id", editId);
+        if (error && isMissingColumn(error)) {
+          warnAgreementColumnsMissing();
+          ({ error } = await supabase.from("sales").update(withoutAgreementColumns()).eq("id", editId));
+        }
         if (error) throw error;
         // Clear existing links
         await supabase.from("sale_vehicles").delete().eq("sale_id", editId);
       } else {
-        const { data, error } = await supabase.from("sales").insert(payload).select().single();
+        let { data, error } = await supabase.from("sales").insert(payload).select().single();
+        if (error && isMissingColumn(error)) {
+          warnAgreementColumnsMissing();
+          ({ data, error } = await supabase.from("sales").insert(withoutAgreementColumns()).select().single());
+        }
         if (error) throw error;
         if (!data) throw new Error("Failed to retrieve new sale ID");
         saleId = data.id;
@@ -674,6 +788,20 @@ export default function Sales() {
       manual_customer_email: "",
       manual_customer_address: "",
       initial_payment: "",
+      is_registered: !!s.is_registered,
+      engine_no: s.agreement_details?.engine_no || "",
+      registration_no: s.agreement_details?.registration_no || "",
+      witness1_name: s.agreement_details?.witnesses?.[0]?.name || "",
+      witness1_address: s.agreement_details?.witnesses?.[0]?.address || "",
+      witness1_occupation: s.agreement_details?.witnesses?.[0]?.occupation || "",
+      witness2_name: s.agreement_details?.witnesses?.[1]?.name || "",
+      witness2_address: s.agreement_details?.witnesses?.[1]?.address || "",
+      witness2_occupation: s.agreement_details?.witnesses?.[1]?.occupation || "",
+      sold_by_name: s.agreement_details?.sold_by?.name || "",
+      sold_by_address: s.agreement_details?.sold_by?.address || "",
+      sold_by_occupation: s.agreement_details?.sold_by?.occupation || "",
+      received_good_condition: !!s.agreement_details?.received_good_condition,
+      received_date: s.agreement_details?.received_date || "",
     });
     setDialogOpen(true);
   };
@@ -2323,6 +2451,196 @@ export default function Sales() {
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* Registered vehicle — the booklet agreement receipt */}
+            <div className="rounded-2xl border border-white/10 bg-foreground/5 overflow-hidden">
+              <div className="flex items-center gap-3 p-4">
+                <div className="flex-1 min-w-0">
+                  <Label htmlFor="is-registered" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground cursor-pointer">
+                    Registered Vehicle
+                  </Label>
+                  <p className="text-[11px] text-muted-foreground/70 mt-1 leading-snug">
+                    {form.is_registered
+                      ? "Sales agreement receipt — engine and registration numbers, witnesses and seller details are printed on the document."
+                      : "Standard receipt. Turn on for a registered vehicle to record witnesses and seller details."}
+                  </p>
+                </div>
+                <Switch
+                  id="is-registered"
+                  checked={form.is_registered}
+                  onCheckedChange={(checked) => setForm({ ...form, is_registered: checked })}
+                  className="data-[state=checked]:bg-emerald-500 shrink-0"
+                />
+              </div>
+
+              {form.is_registered && (
+                <div className="border-t border-white/10 p-4 flex flex-col gap-5 bg-emerald-500/[0.04]">
+                  {/* Vehicle papers */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Engine No.</Label>
+                      <Input
+                        className="rounded-lg h-10 bg-background/60 border-white/10"
+                        placeholder="Engine number"
+                        value={form.engine_no}
+                        onChange={(e) => setForm({ ...form, engine_no: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Registration No.</Label>
+                      <Input
+                        className="rounded-lg h-10 bg-background/60 border-white/10 uppercase"
+                        placeholder="ABC-123XY"
+                        value={form.registration_no}
+                        onChange={(e) => setForm({ ...form, registration_no: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Witnesses */}
+                  <div className="space-y-3">
+                    <Label className="text-[10px] uppercase font-bold text-emerald-500 ml-1">
+                      In the presence of the following witnesses
+                    </Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="rounded-xl border border-white/10 bg-background/40 p-3 flex flex-col gap-3">
+                        <span className="text-[10px] font-bold uppercase text-muted-foreground/70">Witness 1</span>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Name</Label>
+                      <Input
+                        className="rounded-lg h-10 bg-background/60 border-white/10"
+                        placeholder="Full name"
+                        value={form.witness1_name}
+                        onChange={(e) => setForm({ ...form, witness1_name: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Address</Label>
+                      <Input
+                        className="rounded-lg h-10 bg-background/60 border-white/10"
+                        placeholder="Address"
+                        value={form.witness1_address}
+                        onChange={(e) => setForm({ ...form, witness1_address: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Occupation</Label>
+                      <Input
+                        className="rounded-lg h-10 bg-background/60 border-white/10"
+                        placeholder="Occupation"
+                        value={form.witness1_occupation}
+                        onChange={(e) => setForm({ ...form, witness1_occupation: e.target.value })}
+                      />
+                    </div>
+                      </div>
+                      <div className="rounded-xl border border-white/10 bg-background/40 p-3 flex flex-col gap-3">
+                        <span className="text-[10px] font-bold uppercase text-muted-foreground/70">Witness 2</span>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Name</Label>
+                      <Input
+                        className="rounded-lg h-10 bg-background/60 border-white/10"
+                        placeholder="Full name"
+                        value={form.witness2_name}
+                        onChange={(e) => setForm({ ...form, witness2_name: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Address</Label>
+                      <Input
+                        className="rounded-lg h-10 bg-background/60 border-white/10"
+                        placeholder="Address"
+                        value={form.witness2_address}
+                        onChange={(e) => setForm({ ...form, witness2_address: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Occupation</Label>
+                      <Input
+                        className="rounded-lg h-10 bg-background/60 border-white/10"
+                        placeholder="Occupation"
+                        value={form.witness2_occupation}
+                        onChange={(e) => setForm({ ...form, witness2_occupation: e.target.value })}
+                      />
+                    </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sold by */}
+                  <div className="space-y-3">
+                    <Label className="text-[10px] uppercase font-bold text-emerald-500 ml-1">Sold by</Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Name</Label>
+                      <Input
+                        className="rounded-lg h-10 bg-background/60 border-white/10"
+                        placeholder="Full name"
+                        value={form.sold_by_name}
+                        onChange={(e) => setForm({ ...form, sold_by_name: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Address</Label>
+                      <Input
+                        className="rounded-lg h-10 bg-background/60 border-white/10"
+                        placeholder="Address"
+                        value={form.sold_by_address}
+                        onChange={(e) => setForm({ ...form, sold_by_address: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Occupation</Label>
+                      <Input
+                        className="rounded-lg h-10 bg-background/60 border-white/10"
+                        placeholder="Occupation"
+                        value={form.sold_by_occupation}
+                        onChange={(e) => setForm({ ...form, sold_by_occupation: e.target.value })}
+                      />
+                    </div>
+                    </div>
+                  </div>
+
+                  {/* Buyer's acceptance */}
+                  <div className="rounded-xl border border-white/10 bg-background/40 p-3 flex flex-col sm:flex-row sm:items-center gap-3">
+                    <label className="flex items-start gap-2.5 flex-1 cursor-pointer">
+                      <Checkbox
+                        checked={form.received_good_condition}
+                        onCheckedChange={(checked) =>
+                          setForm({
+                            ...form,
+                            received_good_condition: !!checked,
+                            // Received today unless a date is already set.
+                            received_date: checked ? (form.received_date || form.sale_date) : "",
+                          })
+                        }
+                        className="data-[state=checked]:bg-emerald-500 mt-0.5"
+                      />
+                      <span className="text-[11px] font-semibold leading-snug">
+                        Vehicle received in good condition
+                        <span className="block text-[10px] font-normal text-muted-foreground/70">
+                          Ticked on the printed document, with the date beside it.
+                        </span>
+                      </span>
+                    </label>
+                    <div className="space-y-1.5 sm:w-44 shrink-0">
+                      <Label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Date received</Label>
+                      <Input
+                        type="date"
+                        className="rounded-lg h-10 bg-background/60 border-white/10 disabled:opacity-40"
+                        disabled={!form.received_good_condition}
+                        value={form.received_date}
+                        onChange={(e) => setForm({ ...form, received_date: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-muted-foreground/70 leading-snug">
+                    Signature lines for the witnesses, the seller, the buyer and the Managing Director are
+                    printed on the document to be signed by hand.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
