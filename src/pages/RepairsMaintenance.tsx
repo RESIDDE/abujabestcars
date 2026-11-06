@@ -1909,9 +1909,10 @@ export default function RepairsMaintenance() {
 
       {/* Payment History Dialog */}
       <Dialog open={!!paymentRepairId} onOpenChange={(v) => !v && setPaymentRepairId(null)}>
-        <DialogContent className="max-w-2xl w-[95vw] sm:w-full rounded-3xl glass-panel border-white/10 p-0 overflow-hidden bg-background/95 backdrop-blur-3xl">
+        <DialogContent className="max-w-2xl w-[95vw] sm:w-full rounded-3xl glass-panel border-white/10 p-0 overflow-hidden bg-background/95 backdrop-blur-3xl" hideClose>
           <div className="p-6 border-b border-white/5 bg-foreground/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <DialogHeader>
+            <DialogHeader className="flex-row items-center gap-3 space-y-0">
+              <BackButton onBack={() => setPaymentRepairId(null)} className="relative z-10" />
               <DialogTitle className="text-xl font-bold flex items-center gap-2">
                 <CreditCard className="w-5 h-5 text-emerald-500" /> Payment History & Balance
               </DialogTitle>
@@ -2139,9 +2140,9 @@ export default function RepairsMaintenance() {
 
       {/* Form Dialog */}
       <Dialog open={open} onOpenChange={(v) => !v && closeDialog()}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto rounded-3xl glass-panel shadow-2xl border-white/10 p-0 bg-background/95 backdrop-blur-3xl">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto rounded-3xl glass-panel shadow-2xl border-white/10 p-0 bg-background/95 backdrop-blur-3xl" hideClose>
           <div className="p-4 sm:p-6 border-b border-white/5 bg-foreground/5 sticky top-0 z-50 backdrop-blur-md flex items-center gap-3">
-             <BackButton onBack={closeDialog} iconOnly title="Back" />
+             <BackButton onBack={closeDialog} className="relative z-10" />
              <DialogHeader className="text-left">
                <DialogTitle className="text-xl font-bold flex items-center gap-2">
                  <Wrench className="w-5 h-5 text-amber-500" />
@@ -2683,9 +2684,10 @@ export default function RepairsMaintenance() {
 
       {/* History Dialog */}
       <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
-        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto rounded-3xl glass-panel shadow-2xl border-white/10 p-0 bg-background/95 backdrop-blur-3xl">
-          <div className="p-6 border-b border-white/5 bg-foreground/5 flex items-center justify-between">
-             <DialogHeader>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto rounded-3xl glass-panel shadow-2xl border-white/10 p-0 bg-background/95 backdrop-blur-3xl" hideClose>
+          <div className="p-6 border-b border-white/5 bg-foreground/5 flex items-center justify-between gap-3">
+             <DialogHeader className="flex-row items-center gap-3 space-y-0">
+                <BackButton onBack={() => setHistoryOpen(false)} className="relative z-10" />
                 <DialogTitle className="text-xl font-bold flex items-center gap-2">
                    <HistoryIcon className="h-5 w-5 text-amber-500" />
                    {historyMode === "customer" ? `Customer History: ${historyCustomerName}` : `Vehicle History: ${historyVehicleLabel}`}
@@ -2754,9 +2756,10 @@ export default function RepairsMaintenance() {
       </Dialog>
       {/* Preview Dialog */}
       <Dialog open={!!previewRepair} onOpenChange={(v) => !v && setPreviewRepair(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl glass-panel shadow-2xl border-white/10 p-0 bg-white">
-          <div className="p-4 border-b flex items-center justify-between bg-gray-50 sticky top-0 z-10">
-            <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl glass-panel shadow-2xl border-white/10 p-0 bg-white" hideClose>
+          <div className="p-4 border-b flex items-center justify-between gap-3 bg-gray-50 sticky top-0 z-10">
+            <BackButton onBack={() => setPreviewRepair(null)} className="relative z-10" />
+            <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2 flex-1 min-w-0">
               <Eye className="h-5 w-5 text-sky-500" />
               Job Card Preview: {previewRepair?.job_card_no}
             </h2>

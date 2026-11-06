@@ -564,9 +564,9 @@ export default function Inquiries() {
       )}
 
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) closeDialog(); }}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl glass-panel shadow-2xl border-white/10 p-0 bg-background/95 backdrop-blur-3xl">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl glass-panel shadow-2xl border-white/10 p-0 bg-background/95 backdrop-blur-3xl" hideClose>
           <div className="p-4 sm:p-6 border-b border-white/5 bg-foreground/5 sticky top-0 z-50 backdrop-blur-md flex items-center gap-3">
-             <BackButton onBack={closeDialog} iconOnly title="Back" />
+             <BackButton onBack={closeDialog} className="relative z-10" />
             <DialogHeader className="text-left">
               <DialogTitle className="text-xl font-bold flex items-center gap-2">
                 <MessageSquare className="w-5 h-5 text-indigo-500" />
@@ -765,8 +765,9 @@ export default function Inquiries() {
 
       {/* Advanced Settings Dialog */}
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent className="max-w-md rounded-3xl glass-panel shadow-2xl border-white/10 p-0 bg-background/95 backdrop-blur-3xl">
+        <DialogContent className="max-w-md rounded-3xl glass-panel shadow-2xl border-white/10 p-0 bg-background/95 backdrop-blur-3xl" hideClose>
           <div className="p-6 border-b border-white/5 bg-foreground/5 flex items-center gap-3">
+            <BackButton onBack={() => setSettingsOpen(false)} className="relative z-10" />
             <Settings className="w-5 h-5 text-indigo-500" />
             <DialogTitle className="text-xl font-bold">Advanced Settings</DialogTitle>
           </div>
@@ -818,17 +819,20 @@ export default function Inquiries() {
       </Dialog>
       {/* View Inquiry Dialog */}
       <Dialog open={!!viewId} onOpenChange={(open) => { if (!open) setViewId(null); }}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto rounded-3xl glass-panel shadow-2xl border-white/10 p-0 bg-background/95 backdrop-blur-3xl">
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto rounded-3xl glass-panel shadow-2xl border-white/10 p-0 bg-background/95 backdrop-blur-3xl" hideClose>
           {(() => {
             const i = (inquiries as any[]).find(inq => inq.id === viewId);
             if (!i) return null;
             return (
               <>
-                <div className="p-6 border-b border-white/5 bg-foreground/5 sticky top-0 z-50 backdrop-blur-md flex items-center justify-between">
-                  <DialogTitle className="text-xl font-bold flex items-center gap-2">
-                    <MessageSquare className="w-5 h-5 text-indigo-500" />
-                    Inquiry Details
-                  </DialogTitle>
+                <div className="p-6 border-b border-white/5 bg-foreground/5 sticky top-0 z-50 backdrop-blur-md flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <BackButton onBack={() => setViewId(null)} className="relative z-10" />
+                    <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                      <MessageSquare className="w-5 h-5 text-indigo-500" />
+                      Inquiry Details
+                    </DialogTitle>
+                  </div>
                   <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${
                     i.status === "Open" ? "bg-indigo-500/10 text-indigo-500 border border-indigo-500/20" :
                     i.status === "In Progress" ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" :

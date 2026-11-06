@@ -46,6 +46,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { canEdit, canCreate, canDelete } from "@/lib/permissions";
 import { logAction } from "@/lib/logger";
 import { CurrencyInput } from "@/components/CurrencyInput";
+import { BackButton } from "@/components/BackButton";
 
 const CATEGORIES = [
   "Errands & Logistics",
@@ -894,9 +895,10 @@ export default function Expenses() {
 
       {/* Record / Edit Expense Dialog */}
       <Dialog open={dialogOpen} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent className="max-w-2xl max-h-[92vh] flex flex-col rounded-3xl glass-panel border-white/10 p-0 shadow-2xl">
-          <div className="sticky top-0 z-10 glass-panel border-b border-white/10 p-4 sm:p-6 flex justify-between items-center bg-background/80 backdrop-blur-xl shrink-0">
-            <div>
+        <DialogContent className="max-w-2xl max-h-[92vh] flex flex-col rounded-3xl glass-panel border-white/10 p-0 shadow-2xl" hideClose>
+          <div className="sticky top-0 z-10 glass-panel border-b border-white/10 p-4 sm:p-6 flex justify-between items-center gap-3 bg-background/80 backdrop-blur-xl shrink-0">
+            <BackButton onBack={closeDialog} className="relative z-10" />
+            <div className="flex-1 min-w-0">
               <DialogTitle className="text-xl font-bold flex items-center gap-2">
                 <Receipt className="h-5 w-5 text-amber-500" /> 
                 {editingExpense 
@@ -911,9 +913,6 @@ export default function Expenses() {
                   : "Add one or multiple expense items in this single record."}
               </p>
             </div>
-            <Button variant="ghost" size="icon" onClick={closeDialog} className="rounded-full">
-              <X className="h-5 w-5" />
-            </Button>
           </div>
 
           <div className="p-6 space-y-5 overflow-y-auto max-h-[calc(92vh-160px)]">

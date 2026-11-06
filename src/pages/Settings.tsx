@@ -32,6 +32,7 @@ import {
 } from "@/lib/permissions";
 import { logAction, describeLog } from "@/lib/logger";
 import { exportToExcel } from "@/lib/exportHelpers";
+import { BackButton } from "@/components/BackButton";
 
 type Tab = "team" | "permissions" | "audit";
 
@@ -1096,9 +1097,10 @@ export default function Settings() {
 
       {/* ── INVITE USER DIALOG ── */}
       <Dialog open={inviteOpen} onOpenChange={(v) => !inviting && setInviteOpen(v)}>
-        <DialogContent className="max-w-md rounded-3xl bg-background border border-border shadow-2xl p-0">
-          <div className="p-6 border-b border-border">
-            <DialogHeader>
+        <DialogContent className="max-w-md rounded-3xl bg-background border border-border shadow-2xl p-0" hideClose>
+          <div className="p-6 border-b border-border flex items-start gap-3">
+            <BackButton onBack={() => setInviteOpen(false)} className="relative z-10 mt-0.5" />
+            <DialogHeader className="flex-1 min-w-0">
               <DialogTitle className="text-lg font-semibold flex items-center gap-2 text-foreground">
                 <UserPlus className="h-4 w-4 text-primary" /> Invite New Team Member
               </DialogTitle>
@@ -1170,9 +1172,10 @@ export default function Settings() {
 
       {/* ── CREATE ROLE DIALOG ── */}
       <Dialog open={createRoleOpen} onOpenChange={(v) => !creatingRole && setCreateRoleOpen(v)}>
-        <DialogContent className="max-w-md rounded-3xl bg-background border border-border shadow-2xl p-0">
-          <div className="p-6 border-b border-border">
-            <DialogHeader>
+        <DialogContent className="max-w-md rounded-3xl bg-background border border-border shadow-2xl p-0" hideClose>
+          <div className="p-6 border-b border-border flex items-start gap-3">
+            <BackButton onBack={() => setCreateRoleOpen(false)} className="relative z-10 mt-0.5" />
+            <DialogHeader className="flex-1 min-w-0">
               <DialogTitle className="text-lg font-semibold flex items-center gap-2 text-foreground">
                 <Plus className="h-4 w-4 text-emerald-500" /> Create Custom Role
               </DialogTitle>
@@ -1213,9 +1216,10 @@ export default function Settings() {
 
       {/* ── RENAME ROLE DIALOG ── */}
       <Dialog open={renameRoleOpen} onOpenChange={(v) => !renamingRole && setRenameRoleOpen(v)}>
-        <DialogContent className="max-w-md rounded-3xl bg-background border border-border shadow-2xl p-0">
-          <div className="p-6 border-b border-border">
-            <DialogHeader>
+        <DialogContent className="max-w-md rounded-3xl bg-background border border-border shadow-2xl p-0" hideClose>
+          <div className="p-6 border-b border-border flex items-start gap-3">
+            <BackButton onBack={() => setRenameRoleOpen(false)} className="relative z-10 mt-0.5" />
+            <DialogHeader className="flex-1 min-w-0">
               <DialogTitle className="text-lg font-semibold flex items-center gap-2 text-foreground">
                 <Pencil className="h-4 w-4 text-sky-500" /> Rename Role Title
               </DialogTitle>
@@ -1253,9 +1257,10 @@ export default function Settings() {
 
       {/* ── TRANSFER ADMIN DIALOG ── */}
       <Dialog open={transferOpen} onOpenChange={(v) => !transferring && setTransferOpen(v)}>
-        <DialogContent className="max-w-md rounded-3xl bg-background border border-border shadow-2xl p-0">
-          <div className="p-6 border-b border-border">
-            <DialogHeader>
+        <DialogContent className="max-w-md rounded-3xl bg-background border border-border shadow-2xl p-0" hideClose>
+          <div className="p-6 border-b border-border flex items-start gap-3">
+            <BackButton onBack={() => setTransferOpen(false)} className="relative z-10 mt-0.5" />
+            <DialogHeader className="flex-1 min-w-0">
               <DialogTitle className="text-lg font-semibold flex items-center gap-2 text-foreground">
                 <ArrowRightLeft className="h-4 w-4 text-primary" /> Transfer Admin Role
               </DialogTitle>

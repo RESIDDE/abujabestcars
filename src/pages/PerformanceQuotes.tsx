@@ -946,10 +946,10 @@ export default function PerformanceQuotes() {
 
       {/* New Quote Dialog */}
       <Dialog open={dialogOpen} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl border border-border p-0 shadow-2xl">
-          <div className="sticky top-0 z-10 border-b border-border p-4 sm:p-6 flex justify-between items-center bg-background/95 backdrop-blur-xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl border border-border p-0 shadow-2xl" hideClose>
+          <div className="sticky top-0 z-10 border-b border-border p-4 sm:p-6 flex justify-between items-center gap-3 bg-background/95 backdrop-blur-xl">
             <div className="flex items-center gap-3">
-              <BackButton onBack={closeDialog} iconOnly title="Back" />
+              <BackButton onBack={closeDialog} className="relative z-10" />
               <DialogTitle className="text-xl sm:text-2xl font-bold flex items-center gap-2">
                 {editingQuote ? (
                   <><Pencil className="h-5 w-5 sm:h-6 sm:w-6 text-blue-500" /> Edit Proforma Invoice</>
@@ -958,7 +958,6 @@ export default function PerformanceQuotes() {
                 )}
               </DialogTitle>
             </div>
-            <Button variant="ghost" size="icon" onClick={closeDialog} className="hidden sm:flex rounded-full"><X className="h-5 w-5" /></Button>
           </div>
 
           <div className="p-6 space-y-8">

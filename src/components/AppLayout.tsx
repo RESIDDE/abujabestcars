@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { BackButton } from "@/components/BackButton";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { canAccess, type AppRole } from "@/lib/permissions";
@@ -49,9 +48,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <header className="sticky top-0 z-30 h-16 flex items-center px-4 sm:px-6 gap-3 print:hidden bg-white/90 dark:bg-[#18191c]/90 backdrop-blur-xl border-b border-slate-200 dark:border-[#282a32]">
             {/* Sidebar toggle */}
             <SidebarTrigger className="mr-1 -ml-1 rounded-full p-2 hover:bg-slate-100 dark:hover:bg-[#24262c] text-slate-500 dark:text-[#8e919f] hover:text-slate-900 dark:hover:text-white transition-colors" />
-
-            {/* Back — on every page but the dashboard, which is where back leads */}
-            {location.pathname !== "/dashboard" && <BackButton />}
 
             {/* Neon Brand Lightning Bolt */}
             <div

@@ -266,9 +266,9 @@ export default function Customers() {
 
       {/* Delete Confirmation */}
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) closeDialog(); }}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl glass-panel shadow-2xl border-white/10 p-0 bg-background/95 backdrop-blur-3xl">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl glass-panel shadow-2xl border-white/10 p-0 bg-background/95 backdrop-blur-3xl" hideClose>
           <div className="p-4 sm:p-6 border-b border-white/5 bg-foreground/5 sticky top-0 z-50 backdrop-blur-md flex items-center gap-3">
-             <BackButton onBack={closeDialog} iconOnly title="Back" />
+             <BackButton onBack={closeDialog} className="relative z-10" />
              <DialogHeader className="text-left">
                 <DialogTitle className="text-xl font-bold flex items-center gap-2">
                   <Users className="w-5 h-5 text-sky-500" />
