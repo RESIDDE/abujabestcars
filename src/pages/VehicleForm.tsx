@@ -395,9 +395,6 @@ export default function VehicleForm() {
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
-        <Button type="button" variant="ghost" size="icon" onClick={() => navigate(-1)} className="sm:hidden h-8 w-8 rounded-full shrink-0">
-          <ArrowLeft className="w-4 h-4" />
-        </Button>
         <h1 className="text-3xl font-bold text-foreground">
           {isEdit 
             ? (form.inventory_type === 'resale' ? "Edit Resale Vehicle" : "Edit Vehicle") 

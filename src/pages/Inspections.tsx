@@ -28,6 +28,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { canEdit, canCreate } from "@/lib/permissions";
 import { logAction } from "@/lib/logger";
+import { BackButton } from "@/components/BackButton";
 
 type Inspection = {
   id: string;
@@ -573,9 +574,7 @@ export default function Inspections() {
       <Dialog open={open} onOpenChange={(v) => !v && closeDialog()}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl glass-panel shadow-2xl border-white/10 p-0 bg-background/95 backdrop-blur-3xl">
           <div className="p-4 sm:p-6 border-b border-white/5 bg-foreground/5 sticky top-0 z-50 backdrop-blur-md flex items-center gap-3">
-             <Button type="button" variant="ghost" size="icon" onClick={closeDialog} className="sm:hidden h-8 w-8 rounded-full shrink-0">
-               <ArrowLeft className="w-4 h-4" />
-             </Button>
+             <BackButton onBack={closeDialog} iconOnly title="Back" />
             <DialogHeader className="text-left">
               <DialogTitle className="text-xl font-bold flex items-center gap-2">
                 <ClipboardCheck className="w-5 h-5 text-indigo-500" />

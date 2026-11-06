@@ -565,9 +565,6 @@ export default function AuthorityToSell() {
       {/* Page Header */}
       <div className="flex flex-col md:flex-row items-start justify-between gap-6 mb-8">
         <div className="flex items-start gap-3">
-          <Button type="button" variant="ghost" size="icon" onClick={() => navigate(-1)} className="sm:hidden mt-1 h-8 w-8 rounded-full shrink-0 bg-white/5 hover:bg-white/10">
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
           <div>
             <div className="flex items-center gap-2 mb-1">
               <FileText className="w-3.5 h-3.5 text-sky-400/60" />

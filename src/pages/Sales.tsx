@@ -58,6 +58,7 @@ import { CustomerSelect } from "@/components/CustomerSelect";
 import { useCustomerDuplicates } from "@/hooks/useCustomerDuplicates";
 import { CustomerSuggestion } from "@/components/CustomerSuggestion";
 import { SalePrintPreview, exportSaleReceipt, buildReceiptNumber, receiptDateOf } from "@/components/sales/SalePrintPreview";
+import { BackButton } from "@/components/BackButton";
 
 const COLORS = ["hsl(var(--primary))", "hsl(142 76% 36%)", "hsl(38 92% 50%)", "hsl(262 83% 58%)", "hsl(0 84% 60%)", "hsl(199 89% 48%)"];
 
@@ -185,7 +186,7 @@ export default function Sales() {
   const { data: vehicles = [] } = useQuery({
     queryKey: ["vehicles"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("vehicles").select("id, make, model, year, trim, color, vin, cost_price").neq("inventory_type", "service");
+      const { data, error } = await supabase.from("vehicles").select("id, make, model, year, trim, color, vin, cost_price, status").neq("inventory_type", "service");
       if (error) throw error;
       return data as any[];
     },
@@ -695,6 +696,16 @@ export default function Sales() {
     setManualVehicleDraft(emptyManualVehicle);
     setDialogOpen(true);
   };
+
+  /* A car that is already sold has nothing left to sell, so it is kept out of
+     the picker — except on a sale that already holds it, which must still show
+     (and keep) its own vehicles while being edited. */
+  const selectableVehicles = useMemo(
+    () => vehicles.filter(
+      (v: any) => v.status?.toLowerCase() !== "sold" || form.selected_vehicle_ids.includes(v.id)
+    ),
+    [vehicles, form.selected_vehicle_ids]
+  );
 
   /* A manually added vehicle is identified by its VIN, so the VIN is required
      and must not already belong to a vehicle on record or to another vehicle
@@ -2006,9 +2017,7 @@ export default function Sales() {
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) closeDialog(); }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl glass-panel shadow-2xl border-white/10 p-0 bg-background/95 backdrop-blur-3xl">
           <div className="p-4 sm:p-6 border-b border-white/5 bg-foreground/5 sticky top-0 z-50 backdrop-blur-xl flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={closeDialog} className="sm:hidden h-8 w-8 rounded-full shrink-0">
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
+            <BackButton onBack={closeDialog} iconOnly title="Back" />
             <DialogHeader className="text-left">
               <DialogTitle className="text-xl font-bold flex items-center gap-2">
                 <Receipt className="w-5 h-5 text-emerald-500" />
@@ -2101,7 +2110,7 @@ export default function Sales() {
                   />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
-                  {vehicles
+                  {selectableVehicles
                     .filter((v) => `${v.year} ${v.make} ${v.model} ${v.vin || ''}`.toLowerCase().includes(vehicleSearch.toLowerCase()))
                     .map((v) => (
                     <div 
@@ -2125,8 +2134,10 @@ export default function Sales() {
                       </div>
                     </div>
                   ))}
-                  {vehicles.filter((v) => `${v.year} ${v.make} ${v.model} ${v.vin || ''}`.toLowerCase().includes(vehicleSearch.toLowerCase())).length === 0 && (
-                     <div className="col-span-1 sm:col-span-2 text-center text-sm text-muted-foreground py-4 italic">No matching vehicles found.</div>
+                  {selectableVehicles.filter((v) => `${v.year} ${v.make} ${v.model} ${v.vin || ''}`.toLowerCase().includes(vehicleSearch.toLowerCase())).length === 0 && (
+                     <div className="col-span-1 sm:col-span-2 text-center text-sm text-muted-foreground py-4 italic">
+                       {vehicleSearch ? "No unsold vehicle matches that search." : "No unsold vehicles in inventory — add the vehicle manually below."}
+                     </div>
                   )}
                 </div>
 

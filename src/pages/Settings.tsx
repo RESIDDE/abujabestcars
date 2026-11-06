@@ -655,15 +655,6 @@ export default function Settings() {
       {/* ── Page Header ────────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-border/80">
         <div className="flex items-center gap-3">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate(-1)}
-            className="sm:hidden h-8 w-8 rounded-xl shrink-0 bg-muted hover:bg-muted/80 text-foreground"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Shield className="w-3.5 h-3.5 text-muted-foreground" />
