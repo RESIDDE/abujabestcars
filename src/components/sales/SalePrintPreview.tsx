@@ -18,7 +18,7 @@ import {
   MODERN_FONT,
 } from "@/components/PrintHeader";
 import { numberToWords } from "@/lib/numberToWords";
-import { captureOffScreen, type DocumentFormat } from "@/lib/documentExport";
+import { captureOffScreen, printDocument, type DocumentFormat } from "@/lib/documentExport";
 import { supabase } from "@/integrations/supabase/client";
 import { QrSignDialog } from "@/lib/qrHelpers";
 import { toast } from "sonner";
@@ -470,6 +470,7 @@ export function SalePrintPreview({
   const [sale, setSale] = useState<any>(initialSale);
   const [customer, setCustomer] = useState<any>(initialCustomer);
   const [showQrSign, setShowQrSign] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const documentRef = useRef<HTMLDivElement>(null);
 
   // Sync state if incoming props change
@@ -538,6 +539,38 @@ export function SalePrintPreview({
   const repSignatureDate =
     sale?.rep_signature_date ||
     (repSignature ? (sale?.sale_date || sale?.created_at) : null);
+
+  // Added to the iPhone home screen there is no print dialog, so the receipt
+  // is shared or downloaded as a PDF instead. See printDocument().
+  const handlePrint = async () => {
+    setPrinting(true);
+    try {
+      await printDocument(
+        () =>
+          exportSaleReceipt(
+            {
+              sale,
+              customer,
+              vehicles,
+              payment,
+              paymentIndex,
+              allPayments,
+              customerSignature,
+              customerSignatureDate,
+              repSignature,
+              repSignatureDate,
+            },
+            "pdf"
+          ),
+        `receipt-${(sale?.id || "").slice(0, 8)}`
+      );
+    } catch (e) {
+      console.error(e);
+      toast.error("Could not open the print dialog");
+    } finally {
+      setPrinting(false);
+    }
+  };
 
   return (
     <div className="animate-fade-up max-w-4xl mx-auto pb-12 print:p-0 print:m-0">
@@ -620,10 +653,11 @@ export function SalePrintPreview({
             )}
 
             <Button
-              onClick={() => window.print()}
+              onClick={handlePrint}
+              disabled={printing}
               className="rounded-full gap-2 bg-[#d4ff32] hover:brightness-105 text-black font-extrabold shadow-lg shadow-[#d4ff32]/25 px-5 h-9 text-xs"
             >
-              <Printer className="w-3.5 h-3.5" /> Print Receipt
+              <Printer className="w-3.5 h-3.5" /> {printing ? "Preparing..." : "Print Receipt"}
             </Button>
           </div>
         </div>

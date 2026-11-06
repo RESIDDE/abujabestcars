@@ -28,7 +28,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { logAction } from "@/lib/logger";
-import { captureDocumentElement, saveBlob, type DocumentFormat } from "@/lib/documentExport";
+import { captureDocumentElement, saveBlob, printDocument, type DocumentFormat } from "@/lib/documentExport";
 import { format, subMonths } from "date-fns";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -166,7 +166,19 @@ export default function SalesAgreement() {
       buyer: previewData?.buyerName,
       vehicle: `${previewData?.vehicleMake} ${previewData?.vehicleYearModel}`.trim(),
     });
-    window.print();
+    // Added to the iPhone home screen there is no print dialog, so the
+    // document is shared or downloaded as a PDF instead. See printDocument().
+    const el = documentRef.current;
+    printDocument(
+      async () => {
+        if (!el) throw new Error("No document to print");
+        return captureDocumentElement(el, "pdf");
+      },
+      "sales-agreement-" + new Date().toISOString().slice(0, 10)
+    ).catch((err) => {
+      console.error(err);
+      toast.error("Could not open the print dialog");
+    });
   };
 
   const handleDownload = async (format: DocumentFormat) => {

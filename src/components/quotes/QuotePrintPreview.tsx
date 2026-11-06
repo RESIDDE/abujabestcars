@@ -17,7 +17,7 @@ import {
 } from "@/components/PrintHeader";
 import { numberToWords } from "@/lib/numberToWords";
 import { parseVehicleSpec } from "@/lib/vehicleSpec";
-import { captureOffScreen, saveBlob, type DocumentFormat } from "@/lib/documentExport";
+import { captureOffScreen, saveBlob, printDocument, type DocumentFormat } from "@/lib/documentExport";
 import { toast } from "sonner";
 
 interface QuotePrintPreviewProps {
@@ -344,6 +344,24 @@ export async function exportQuotePdf(quote: any, format: DocumentFormat = "pdf")
 export function QuotePrintPreview({ quote, onBack, onDownloadPdf }: QuotePrintPreviewProps) {
   const documentRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
+  const [printing, setPrinting] = useState(false);
+
+  // Added to the iPhone home screen there is no print dialog, so the invoice
+  // is shared or downloaded as a PDF instead. See printDocument().
+  const handlePrint = async () => {
+    setPrinting(true);
+    try {
+      await printDocument(
+        () => exportQuoteDocument(quote, "pdf"),
+        `proforma-${(quote.id || "").slice(0, 8)}`
+      );
+    } catch (e) {
+      console.error(e);
+      toast.error("Could not open the print dialog");
+    } finally {
+      setPrinting(false);
+    }
+  };
 
   const handleDownload = async () => {
     if (onDownloadPdf) return onDownloadPdf();
@@ -409,10 +427,11 @@ export function QuotePrintPreview({ quote, onBack, onDownloadPdf }: QuotePrintPr
             {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Download PDF
           </Button>
           <Button
-            onClick={() => window.print()}
+            onClick={handlePrint}
+            disabled={printing}
             className="rounded-full gap-2 bg-[#d4ff32] hover:brightness-105 text-black font-extrabold shadow-lg shadow-[#d4ff32]/25 px-6"
           >
-            <Printer className="w-4 h-4" /> Print Invoice
+            <Printer className="w-4 h-4" /> {printing ? "Preparing..." : "Print Invoice"}
           </Button>
         </div>
       </div>

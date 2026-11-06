@@ -148,3 +148,66 @@ export async function downloadVisibleDocument(
   if (!el) throw new Error(`No document found to export (${selector})`);
   saveBlob(await captureDocumentElement(el, format), filename, format);
 }
+
+/* ------------------------------------------------------------------ */
+/*  Printing from an iOS home-screen app                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * True when the page is running as an installed app rather than in a browser
+ * tab — iOS calls this "standalone", Android/Chrome reports it through the
+ * display-mode media query.
+ */
+export function isStandaloneApp(): boolean {
+  if (typeof window === "undefined") return false;
+  const iosStandalone = (window.navigator as Navigator & { standalone?: boolean }).standalone;
+  return Boolean(iosStandalone) || window.matchMedia("(display-mode: standalone)").matches;
+}
+
+/**
+ * Prints a document.
+ *
+ * In a normal browser tab this is just window.print(). Added to the iPhone
+ * home screen it is not: an iOS standalone web app has no print UI, so
+ * window.print() does nothing at all and the button appears dead. There is
+ * no way to open the print dialog from that context.
+ *
+ * So when running standalone we build the PDF instead and hand it to the
+ * system share sheet, which offers Print (as well as AirDrop, Files, Mail and
+ * WhatsApp). If sharing is unavailable or the user is outside the gesture
+ * window iOS allows, the file is downloaded instead — which always works.
+ *
+ * @param getBlob builds the PDF; only called when it is actually needed
+ */
+export async function printDocument(
+  getBlob: () => Promise<Blob>,
+  filename: string
+): Promise<"printed" | "shared" | "downloaded"> {
+  if (!isStandaloneApp()) {
+    window.print();
+    return "printed";
+  }
+
+  const blob = await getBlob();
+  const file = new File([blob], `${filename}.pdf`, { type: "application/pdf" });
+
+  const canShare =
+    typeof navigator.share === "function" &&
+    typeof navigator.canShare === "function" &&
+    navigator.canShare({ files: [file] });
+
+  if (canShare) {
+    try {
+      await navigator.share({ files: [file], title: filename });
+      return "shared";
+    } catch (err) {
+      // A cancelled share is not a failure — do not then force a download.
+      if (err instanceof DOMException && err.name === "AbortError") return "shared";
+      // Anything else (NotAllowedError when outside the gesture window, and
+      // so on) falls through to the download below.
+    }
+  }
+
+  saveBlob(blob, filename, "pdf");
+  return "downloaded";
+}
