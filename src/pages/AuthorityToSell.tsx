@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { SignaturePad } from "@/components/SignaturePad";
-import { Printer, FileText, CheckCircle2, History, Search, Calendar as CalendarIcon, ArrowLeft, Trash2, PlusCircle, Users, Car, Pencil, LayoutGrid, List, ChevronRight, CheckCircle } from "lucide-react";
+import { Printer, Download, FileText, CheckCircle2, History, Search, Calendar as CalendarIcon, ArrowLeft, Trash2, PlusCircle, Users, Car, Pencil, LayoutGrid, List, ChevronRight, CheckCircle } from "lucide-react";
 import { CustomPagination } from "@/components/CustomPagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -20,7 +20,11 @@ import { PrintFooter } from "@/components/PrintFooter";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { canEdit, canCreate, canDelete } from "@/lib/permissions";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { logAction } from "@/lib/logger";
+import { captureDocumentElement, saveBlob, type DocumentFormat } from "@/lib/documentExport";
 import { format, subMonths } from "date-fns";
 
 type ATS = {
@@ -97,6 +101,21 @@ export default function AuthorityToSell() {
       vehicle: `${previewData?.vehicleMake} ${previewData?.vehicleYearModel}`.trim(),
     });
     window.print();
+  };
+
+  const handleDownload = async (format: DocumentFormat) => {
+    const el = documentRef.current;
+    if (!el) return;
+    try {
+      toast.loading(`Preparing ${format.toUpperCase()} download...`, { id: "doc-dl" });
+      const blob = await captureDocumentElement(el, format);
+      saveBlob(blob, "authority-to-sell-" + new Date().toISOString().slice(0, 10), format);
+      logAction("EXPORT", "authority-to-sell", "document", { format: format.toUpperCase(), method: "Download" });
+      toast.success("Download complete", { id: "doc-dl" });
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to generate document", { id: "doc-dl" });
+    }
   };
 
   // ── Queries ──────────────────────────────────────────────────────────────
@@ -341,9 +360,29 @@ export default function AuthorityToSell() {
           <Button variant="outline" onClick={() => setMode("edit")} className="rounded-xl gap-2 font-medium">
             <ArrowLeft className="w-4 h-4" /> Back to Editor
           </Button>
-          <Button onClick={handlePrint} className="rounded-xl gap-2 bg-sky-500 hover:bg-sky-600 text-white shadow-lg shadow-sky-500/20 font-semibold px-6">
-            <Printer className="w-4 h-4" /> Print Document
-          </Button>
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="rounded-xl gap-2 font-medium">
+                  <Download className="w-4 h-4" /> Download
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="rounded-xl p-1">
+                <DropdownMenuItem onClick={() => handleDownload("pdf")} className="rounded-lg cursor-pointer gap-2">
+                  <Download className="h-4 w-4 text-amber-500" /> Save as PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDownload("png")} className="rounded-lg cursor-pointer gap-2">
+                  <Download className="h-4 w-4 text-sky-500" /> Save as PNG
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDownload("jpeg")} className="rounded-lg cursor-pointer gap-2">
+                  <Download className="h-4 w-4 text-indigo-500" /> Save as JPEG
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button onClick={handlePrint} className="rounded-xl gap-2 bg-sky-500 hover:bg-sky-600 text-white shadow-lg shadow-sky-500/20 font-semibold px-6">
+              <Printer className="w-4 h-4" /> Print Document
+            </Button>
+          </div>
         </div>
 
         {/* Printable Document */}

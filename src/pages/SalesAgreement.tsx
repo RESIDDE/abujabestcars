@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { SignaturePad } from "@/components/SignaturePad";
 import {
-  Printer, FileText, CheckCircle2, History, Search,
+  Printer, Download, FileText, CheckCircle2, History, Search,
   ArrowLeft, Trash2, PlusCircle, Users, Car, Pencil,
   LayoutGrid, List, ChevronRight, CheckCircle,
 } from "lucide-react";
@@ -24,7 +24,11 @@ import { PrintFooter } from "@/components/PrintFooter";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { canEdit, canCreate } from "@/lib/permissions";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { logAction } from "@/lib/logger";
+import { captureDocumentElement, saveBlob, type DocumentFormat } from "@/lib/documentExport";
 import { format, subMonths } from "date-fns";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -163,6 +167,21 @@ export default function SalesAgreement() {
       vehicle: `${previewData?.vehicleMake} ${previewData?.vehicleYearModel}`.trim(),
     });
     window.print();
+  };
+
+  const handleDownload = async (format: DocumentFormat) => {
+    const el = documentRef.current;
+    if (!el) return;
+    try {
+      toast.loading(`Preparing ${format.toUpperCase()} download...`, { id: "doc-dl" });
+      const blob = await captureDocumentElement(el, format);
+      saveBlob(blob, "sales-agreement-" + new Date().toISOString().slice(0, 10), format);
+      logAction("EXPORT", "sales-agreement", "document", { format: format.toUpperCase(), method: "Download" });
+      toast.success("Download complete", { id: "doc-dl" });
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to generate document", { id: "doc-dl" });
+    }
   };
 
   // ── Queries ──────────────────────────────────────────────────────────────
@@ -437,9 +456,29 @@ export default function SalesAgreement() {
           <Button variant="outline" onClick={() => setMode("edit")} className="rounded-xl gap-2 font-medium">
             <ArrowLeft className="w-4 h-4" /> Back to Editor
           </Button>
-          <Button onClick={handlePrint} className="rounded-xl gap-2 bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 font-semibold px-6">
-            <Printer className="w-4 h-4" /> Print Document
-          </Button>
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="rounded-xl gap-2 font-medium">
+                  <Download className="w-4 h-4" /> Download
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="rounded-xl p-1">
+                <DropdownMenuItem onClick={() => handleDownload("pdf")} className="rounded-lg cursor-pointer gap-2">
+                  <Download className="h-4 w-4 text-amber-500" /> Save as PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDownload("png")} className="rounded-lg cursor-pointer gap-2">
+                  <Download className="h-4 w-4 text-sky-500" /> Save as PNG
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleDownload("jpeg")} className="rounded-lg cursor-pointer gap-2">
+                  <Download className="h-4 w-4 text-indigo-500" /> Save as JPEG
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button onClick={handlePrint} className="rounded-xl gap-2 bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 font-semibold px-6">
+              <Printer className="w-4 h-4" /> Print Document
+            </Button>
+          </div>
         </div>
 
         {/* Printable Document */}

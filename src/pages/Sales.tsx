@@ -41,6 +41,7 @@ import {
 import { format, subMonths, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
 import { toast } from "sonner";
 import { exportToExcel, exportToJSON, printTable } from "@/lib/exportHelpers";
+import { saveBlob } from "@/lib/documentExport";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { canEdit, canCreate, canDelete } from "@/lib/permissions";
@@ -782,16 +783,9 @@ export default function Sales() {
           repSignature: sale.rep_signature || null,
           repSignatureDate: sale.rep_signature_date || null,
         },
-        type,
-        filename
+        type
       );
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${filename}.${type}`;
-      a.click();
-      URL.revokeObjectURL(url);
+      saveBlob(blob, filename, type);
 
       logAction("EXPORT", "Sales", sale.id, {
         vehicle: sale.sale_vehicles?.[0]?.vehicle

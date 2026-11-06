@@ -21,6 +21,7 @@ import {
 import { CustomerSelect } from "@/components/CustomerSelect";
 import { CurrencyInput } from "@/components/CurrencyInput";
 import { useCustomerDuplicates } from "@/hooks/useCustomerDuplicates";
+import { CustomerSuggestion } from "@/components/CustomerSuggestion";
 import { QuotePrintPreview, exportQuotePdf } from "@/components/quotes/QuotePrintPreview";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -507,12 +508,12 @@ export default function PerformanceQuotes() {
     }));
   };
 
-  const downloadQuotePDF = async (quote: any) => {
+  const downloadQuotePDF = async (quote: any, format: "pdf" | "png" | "jpeg" = "pdf") => {
     try {
-      toast.loading("Preparing invoice download...", { id: "quote-dl" });
-      await exportQuotePdf(quote);
-      logAction("EXPORT", "Proforma Invoice", quote.id, { customer: quote.customers?.name, format: "PDF", method: "Download" });
-      toast.success("Invoice downloaded!", { id: "quote-dl" });
+      toast.loading(`Preparing ${format.toUpperCase()} download...`, { id: "quote-dl" });
+      await exportQuotePdf(quote, format);
+      logAction("EXPORT", "Proforma Invoice", quote.id, { customer: quote.customers?.name, format: format.toUpperCase(), method: "Download" });
+      toast.success("Download complete", { id: "quote-dl" });
     } catch (error) {
       console.error(error);
       toast.error("Failed to generate invoice", { id: "quote-dl" });
@@ -561,7 +562,7 @@ export default function PerformanceQuotes() {
       <QuotePrintPreview
         quote={previewQuote}
         onBack={() => setPreviewQuote(null)}
-        onDownloadPdf={() => downloadQuotePDF(previewQuote, false)}
+        onDownloadPdf={() => downloadQuotePDF(previewQuote)}
       />
     );
   }
@@ -894,8 +895,14 @@ export default function PerformanceQuotes() {
                               <DropdownMenuItem onClick={() => handlePrint(q)} className="rounded-lg cursor-pointer gap-2">
                                 <Printer className="h-4 w-4 text-emerald-500" /> Print Quote
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => downloadQuotePDF(q)} className="rounded-lg cursor-pointer gap-2">
+                              <DropdownMenuItem onClick={() => downloadQuotePDF(q, "pdf")} className="rounded-lg cursor-pointer gap-2">
                                 <Download className="h-4 w-4 text-amber-500" /> Save as PDF
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => downloadQuotePDF(q, "png")} className="rounded-lg cursor-pointer gap-2">
+                                <Download className="h-4 w-4 text-sky-500" /> Save as PNG
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => downloadQuotePDF(q, "jpeg")} className="rounded-lg cursor-pointer gap-2">
+                                <Download className="h-4 w-4 text-indigo-500" /> Save as JPEG
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>

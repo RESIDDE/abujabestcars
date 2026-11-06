@@ -17,6 +17,7 @@ import {
 } from "@/components/PrintHeader";
 import { numberToWords } from "@/lib/numberToWords";
 import { parseVehicleSpec } from "@/lib/vehicleSpec";
+import { captureOffScreen, saveBlob, type DocumentFormat } from "@/lib/documentExport";
 import { toast } from "sonner";
 
 interface QuotePrintPreviewProps {
@@ -309,52 +310,31 @@ export const QuoteDocument = forwardRef<HTMLDivElement, { quote: any }>(({ quote
 QuoteDocument.displayName = "QuoteDocument";
 
 /* ---------------------------------------------------------------- */
-/*  PDF export — renders the same sheet off-screen and captures it   */
+/*  File export — renders the same sheet off-screen and captures it  */
 /* ---------------------------------------------------------------- */
 
-async function captureToPdf(el: HTMLElement, filename: string) {
-  const { toJpeg } = await import("html-to-image");
-  const { jsPDF } = await import("jspdf");
-  // JPEG, not PNG: a full-page PNG of an A4 sheet runs to ~10MB, which is
-  // unusable for emailing or WhatsApp. At this quality the text stays crisp.
-  const imgData = await toJpeg(el, { pixelRatio: 2, backgroundColor: "#ffffff", cacheBust: true, quality: 0.92 });
-
-  const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
-  const pageW = pdf.internal.pageSize.getWidth();
-  const pageH = pdf.internal.pageSize.getHeight();
-  const props = pdf.getImageProperties(imgData);
-  const imgH = (props.height * pageW) / props.width;
-
-  let y = 0;
-  pdf.addImage(imgData, "JPEG", 0, y, pageW, imgH);
-  let remaining = imgH - pageH;
-  while (remaining > 1) {
-    y -= pageH;
-    pdf.addPage();
-    pdf.addImage(imgData, "JPEG", 0, y, pageW, imgH);
-    remaining -= pageH;
-  }
-  pdf.save(`${filename}.pdf`);
-}
-
-export async function exportQuotePdf(quote: any) {
-  const host = document.createElement("div");
-  host.style.cssText = "position:fixed;left:-10000px;top:0;z-index:-1;background:#fff;";
-  document.body.appendChild(host);
-  const root = createRoot(host);
-  try {
+/**
+ * Exports the proforma as a file.
+ *
+ * Renders the same <QuoteDocument /> the user sees, so the file always
+ * matches the on-screen and printed document.
+ */
+export async function exportQuoteDocument(quote: any, format: DocumentFormat = "pdf"): Promise<Blob> {
+  return captureOffScreen(async (host) => {
+    const root = createRoot(host);
     await new Promise<void>((resolve) => {
       root.render(<QuoteDocument quote={quote} />);
-      setTimeout(resolve, 900);
+      // Give React a frame to commit before the capture measures the sheet.
+      setTimeout(resolve, 600);
     });
-    const el = host.firstElementChild as HTMLElement;
-    el.style.boxShadow = "none";
-    el.style.border = "none";
-    await captureToPdf(el, `proforma-${(quote.id || "").slice(0, 8)}`);
-  } finally {
-    root.unmount();
-    document.body.removeChild(host);
-  }
+    return () => root.unmount();
+  }, format);
+}
+
+/** Exports the proforma and saves it straight to the user's downloads. */
+export async function exportQuotePdf(quote: any, format: DocumentFormat = "pdf") {
+  const blob = await exportQuoteDocument(quote, format);
+  saveBlob(blob, `proforma-${(quote.id || "").slice(0, 8)}`, format);
 }
 
 /* ---------------------------------------------------------------- */
