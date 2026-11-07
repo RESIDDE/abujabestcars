@@ -664,7 +664,16 @@ export default function AuthorityToSell() {
                     </div>
                     <div className="space-y-2">
                       <Label className="text-muted-foreground text-xs font-semibold px-1">CHASSIS NUMBER</Label>
-                      <Input name="vehicleChassis" value={form.vehicleChassis} onChange={handleChange} placeholder="Chassis / VIN No." className="h-12 bg-background/50 border-white/10 focus-visible:ring-sky-500 rounded-xl" />
+                      <Input
+                        name="vehicleChassis"
+                        value={form.vehicleChassis}
+                        onChange={(e) =>
+                          setForm({ ...form, vehicleChassis: e.target.value.toUpperCase().replace(/\s/g, "").slice(0, 17) })
+                        }
+                        placeholder="17-CHARACTER VIN"
+                        maxLength={17}
+                        className="h-12 bg-background/50 border-white/10 focus-visible:ring-sky-500 rounded-xl font-mono uppercase tracking-wider"
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-muted-foreground text-xs font-semibold px-1">AUTHORITY VALID UNTIL</Label>

@@ -5,6 +5,7 @@ import { useFormPersistence } from "@/hooks/useFormPersistence";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/CurrencyInput";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -827,7 +828,16 @@ export default function SalesAgreement() {
                     </div>
                     <div className="space-y-2">
                       <Label className="text-muted-foreground text-xs font-semibold px-1">CHASSIS / VIN NUMBER</Label>
-                      <Input name="vehicleChassis" value={form.vehicleChassis} onChange={handleChange} placeholder="Chassis / VIN No." className="h-12 bg-background/50 border-white/10 focus-visible:ring-emerald-500 rounded-xl" />
+                      <Input
+                        name="vehicleChassis"
+                        value={form.vehicleChassis}
+                        onChange={(e) =>
+                          setForm({ ...form, vehicleChassis: e.target.value.toUpperCase().replace(/\s/g, "").slice(0, 17) })
+                        }
+                        placeholder="17-CHARACTER VIN"
+                        maxLength={17}
+                        className="h-12 bg-background/50 border-white/10 focus-visible:ring-emerald-500 rounded-xl font-mono uppercase tracking-wider"
+                      />
                     </div>
                   </div>
                 </div>
@@ -842,12 +852,13 @@ export default function SalesAgreement() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <div className="space-y-2">
                       <Label className="text-muted-foreground text-xs font-semibold px-1">AGREED SALE PRICE (&#x20a6;)</Label>
-                      <Input
+                      <CurrencyInput
                         name="salePrice"
                         value={form.salePrice}
                         onChange={handleChange}
-                        placeholder="e.g. 5000000"
-                        className="h-12 bg-background/50 border-white/10 focus-visible:ring-emerald-500 rounded-xl"
+                        placeholder="e.g. 5,000,000"
+                        inputMode="numeric"
+                        className="h-12 bg-background/50 border-white/10 focus-visible:ring-emerald-500 rounded-xl font-semibold"
                       />
                       {form.salePrice && (
                         <p className="text-[11px] text-emerald-400/70 px-1 italic">

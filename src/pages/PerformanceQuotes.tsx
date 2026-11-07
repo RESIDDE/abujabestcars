@@ -1088,10 +1088,11 @@ export default function PerformanceQuotes() {
                     <div className="space-y-1">
                       <Label className="text-xs">VIN / Chassis No.</Label>
                       <Input
-                        placeholder="Optional"
+                        placeholder="Optional · 17 characters"
+                        maxLength={17}
                         value={manualVehicleForm.vin}
-                        onChange={e => setManualVehicleForm(p => ({...p, vin: e.target.value}))}
-                        className="bg-background/50 border-white/10"
+                        onChange={e => setManualVehicleForm(p => ({...p, vin: e.target.value.toUpperCase().replace(/\s/g, "").slice(0, 17)}))}
+                        className="bg-background/50 border-white/10 font-mono uppercase tracking-wider"
                       />
                     </div>
                     <div className="space-y-1">
